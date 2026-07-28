@@ -454,6 +454,13 @@
       }
     })();
   </script>
+  <script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "xtkpxwwi63");
+  </script>
 </head>
 <body>
   <div class="page">
@@ -553,6 +560,7 @@
 
     <section class="version" id="v1">
       <h2>Kernel 1 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v1.cuh" target="_blank" rel="noopener" aria-label="View v1.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+      <p class="kernel-subtitle">3330 TFLOP/s (0.64&times; cuBLAS)</p>
 
       <h3 id="v1-tma">Tensor Memory Accelerator (TMA)</h3>
 
@@ -872,6 +880,7 @@ for each 64-column sub-tile:
 
     <section class="version" id="v2">
       <h2>Kernel 2 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v2.cuh" target="_blank" rel="noopener" aria-label="View v2.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+      <p class="kernel-subtitle">3916 TFLOP/s (0.75&times; cuBLAS)</p>
 
       <p>We can improve on the previous implementation with threadblock clusters. A <code>128 x 256</code> output tile is the largest tile one CTA can compute. With the introduction of distributed shared memory, we can reduce a large number of redundant loads. Blackwell lets two SMs cooperate on a single MMA instruction. In v2, a pair of CTAs computes one <code>256 x 256</code> output tile together using <code>tcgen05.mma.cta_group::2</code>.</p>
 
@@ -977,6 +986,7 @@ commit to tmem_done, multicast to both CTAs</code></pre>
 
     <section class="version" id="v3">
       <h2>Kernel 3 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v3.cuh" target="_blank" rel="noopener" aria-label="View v3.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+      <p class="kernel-subtitle">4378 TFLOP/s (0.84&times; cuBLAS)</p>
 
       <p>This version introduces persistent kernels. Instead of launching one cluster per output tile, we launch only as many clusters as fit on the GPU and let each one compute many tiles.</p>
 
@@ -1051,6 +1061,7 @@ tile 2: g = 6, 7, 8</code></pre>
 
     <section class="version" id="v4">
       <h2>Kernel 4 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v4.cuh" target="_blank" rel="noopener" aria-label="View v4.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+      <p class="kernel-subtitle">5178 TFLOP/s (0.99&times; cuBLAS)</p>
       <p>v3 uses four epilogue warps per CTA. Each warp owns 32 output rows and drains four 64-column fragments:</p>
 
       <pre><code>TMEM read -&gt; wait -&gt; convert to BF16 -&gt; SMEM -&gt; TMA store</code></pre>
@@ -1107,6 +1118,7 @@ release tmem_empty</code></pre>
 
     <section class="version" id="v5">
       <h2>Kernel 5 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v5.cuh" target="_blank" rel="noopener" aria-label="View v5.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+      <p class="kernel-subtitle">5268 TFLOP/s (1.01&times; cuBLAS)</p>
       <p>v4 launches 74 persistent clusters. Each cluster walks a fixed grid stride, visiting every M tile for one N strip before moving to the next strip:</p>
 
       <pre><code>for (tile_id = cluster_idx; tile_id &lt; num_tiles; tile_id += num_clusters)</code></pre>
@@ -1169,6 +1181,7 @@ v5: (m0,n0), (m0,n1), ... (m1,n0), (m1,n1), ...</code></pre>
 
     <section class="version" id="v6">
       <h2>Kernel 6 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v6.cuh" target="_blank" rel="noopener" aria-label="View v6.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+      <p class="kernel-subtitle">5425 TFLOP/s (1.04&times; cuBLAS)</p>
 
       <h3 id="v6-gap">The Gap Between Grids</h3>
 
