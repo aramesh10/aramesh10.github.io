@@ -472,6 +472,7 @@
         <a class="toc-main" href="#overview">Overview</a>
         <a class="toc-sub" href="#nvfp4">NVFP4 Datatype</a>
         <a class="toc-sub" href="#performance">Performance</a>
+        <a class="toc-sub" href="#benchmarking">Benchmarking</a>
 
         <a class="toc-main" href="#v1">Kernel 1</a>
         <a class="toc-sub" href="#v1-tma">TMA</a>
@@ -555,6 +556,16 @@
         <li><a href="https://developer.nvidia.com/blog/even-easier-introduction-cuda/">An Even Easier Introduction to CUDA</a></li>
         <li><a href="https://siboehm.com/articles/22/CUDA-MMM">How to Optimize a CUDA Matmul Kernel for cuBLAS-like Performance: a Worklog</a></li>
         <li><a href="https://brrrviz.com/">BrrrViz</a></li>
+      </ul>
+
+      <h3 id="benchmarking">Benchmarking</h3>
+
+      <p>We follow NVIDIA&rsquo;s <a href="https://docs.nvidia.com/cutlass/latest/media/docs/cpp/gemm_performance_measurement_methodology_guidelines.html">GEMM Performance Measurement Methodology Guidelines</a> for benchmarking. This involves separate warmup and profiling iterations, buffer rotation to reduce cache residency, and initializing with uniform distribution. I ran on the following settings:</p>
+
+      <ul>
+        <li>10000 warmup iterations / 4000 profile iterations</li>
+        <li>Rotate between enough inputs with total footprint above 2x L2 cache size</li>
+        <li>Ran on local B200</li>
       </ul>
     </section>
 
