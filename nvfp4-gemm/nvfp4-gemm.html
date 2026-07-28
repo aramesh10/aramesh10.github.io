@@ -1,0 +1,1384 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NVFP4 GEMM on Blackwell</title>
+  <style>
+    :root {
+      --text: #000;
+      --muted: #666;
+      --border: #ddd;
+      --code-bg: #f5f5f5;
+      --bg: #fff;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Times New Roman", Times, serif;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: 230px minmax(0, 760px) 230px;
+      gap: 48px;
+      max-width: 1316px;
+      margin: 32px auto;
+      padding: 0 24px 60px;
+      align-items: start;
+    }
+
+    aside.sidebar {
+      position: sticky;
+      top: 28px;
+      max-height: calc(100vh - 56px);
+      overflow-y: auto;
+      font-size: 13.5px;
+    }
+
+    aside.sidebar .home-link {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 22px;
+    }
+
+    aside.sidebar .toc-title {
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    aside.sidebar nav a {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 5px 8px 5px 11px;
+      margin-left: -1px;
+      border-left: 2px solid transparent;
+      color: #444;
+      text-decoration: none;
+      line-height: 1.4;
+      text-shadow: 0 0 0 transparent, 0 0 0 transparent;
+      transition: color 0.2s ease, border-left-color 0.2s ease, text-shadow 0.2s ease;
+    }
+
+    aside.sidebar nav a:hover {
+      color: #000;
+      border-left-color: #ccc;
+      text-shadow: 0 0 0.6px currentColor, 0 0 0.6px currentColor;
+      cursor: pointer;
+    }
+
+    aside.sidebar nav a.active {
+      color: #000;
+      border-left-color: #000;
+      text-shadow: 0 0 0.6px currentColor, 0 0 0.6px currentColor;
+    }
+
+    aside.sidebar nav a.toc-main {
+      margin-top: 12px;
+    }
+
+    aside.sidebar nav a.toc-main:first-child {
+      margin-top: 0;
+    }
+
+    aside.sidebar nav a.toc-sub {
+      padding-left: 23px;
+      font-size: 12.5px;
+      color: #777;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    h1 {
+      font-size: 32px;
+      line-height: 1.15;
+      margin: 8px 0 4px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin: 0 0 40px;
+      font-size: 15px;
+    }
+
+    .repo-link {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 14px 0 8px;
+      font-size: 14px;
+    }
+
+    .repo-link.x-link {
+      margin: 0 0 16px;
+    }
+
+    .repo-link svg {
+      width: 17px;
+      height: 17px;
+      color: #000;
+    }
+
+    .kernel-subtitle {
+      color: var(--muted);
+      margin: -10px 0 20px;
+      font-size: 15px;
+    }
+
+    section.version {
+      margin-bottom: 56px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }
+
+    section.version:first-of-type {
+      border-top: none;
+      padding-top: 0;
+    }
+
+    #overview + section.version {
+      border-top: none;
+      padding-top: 0;
+    }
+
+    h2 { font-size: 24px; margin: 8px 0 16px; }
+
+    .gh-link {
+      display: inline-flex;
+      vertical-align: middle;
+      margin-left: 10px;
+      margin-top: -3px;
+      color: var(--muted);
+    }
+
+    .gh-link:hover {
+      color: #000;
+    }
+
+    .gh-link svg {
+      width: 20px;
+      height: 20px;
+    }
+    h3 { font-size: 19px; margin: 30px 0 12px; }
+    h4 { font-size: 16.5px; margin: 22px 0 10px; font-weight: bold; }
+    h5 { font-size: 15.5px; margin: 18px 0 8px; font-weight: bold; color: #222; }
+    h6 { font-size: 14.5px; margin: 14px 0 6px; font-weight: bold; color: #444; }
+
+    p { margin: 0 0 16px; }
+
+    p.centered { text-align: center; }
+
+    a { color: #000; text-decoration: underline; text-underline-offset: 2px; }
+
+    ul, ol { margin: 0 0 16px; padding-left: 24px; }
+    li { margin: 4px 0; }
+
+    .figure {
+      display: block;
+      max-width: 100%;
+      margin: 0 auto 8px;
+    }
+
+    .figure-lg {
+      width: 100%;
+    }
+
+    .figure-md {
+      width: 70%;
+    }
+
+    .figure-spaced {
+      margin-top: 24px;
+      margin-bottom: 24px;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      font-size: 13.5px;
+      line-height: 1.5;
+      max-width: 85%;
+      margin: 0 auto 18px;
+      text-align: left;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: 1em;
+    }
+
+    pre + .code-caption {
+      margin-top: -10px;
+    }
+
+    .code-caption {
+      text-align: center;
+      font-style: italic;
+      font-size: 13.5px;
+      color: var(--muted);
+      margin: 0 0 18px;
+    }
+
+    .operand-table {
+      width: auto;
+      border-collapse: collapse;
+      margin: 0 auto 8px;
+      font-size: 18px;
+    }
+
+    .operand-table td {
+      padding: 4px 32px;
+      text-align: left;
+      border-bottom: none;
+    }
+
+    .operand-table code {
+      font-size: 0.78em;
+    }
+
+    .operand-table td:first-child {
+      white-space: nowrap;
+      color: #111;
+    }
+
+    .operand-table td:last-child {
+      color: #444;
+      white-space: nowrap;
+    }
+
+    .equation-card {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 16px;
+      font-size: 26px;
+      padding: 24px 0 12px;
+      margin: 0 0 6px;
+    }
+
+    .equation-card .eq-body {
+      grid-column: 2;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .equation-card .eq-op {
+      font-size: 0.6em;
+    }
+
+    .equation-card .eq-num {
+      grid-column: 3;
+      justify-self: end;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    blockquote {
+      margin: 0 0 18px;
+      padding: 8px 16px;
+      border-left: 3px solid #999;
+      color: #333;
+      font-size: 15px;
+    }
+
+    .placeholder {
+      border: 1px dashed #999;
+      color: #777;
+      padding: 14px 16px;
+      font-size: 14px;
+      font-style: italic;
+      margin: 0 0 18px;
+      text-align: center;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0 0 20px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 6px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { font-weight: bold; }
+    td.num, th.num { text-align: right; }
+
+    .src-link {
+      font-size: 0.85em;
+      color: var(--muted);
+      margin: -8px 0 18px;
+      word-break: break-all;
+    }
+
+    .src-link a { color: inherit; }
+
+    .def-table {
+      width: 85%;
+      border-collapse: collapse;
+      margin: 6px auto 22px;
+      font-size: 15px;
+    }
+
+    .def-table.compact {
+      width: fit-content;
+      max-width: 100%;
+      margin-left: 0;
+      margin-right: auto;
+    }
+
+    .def-table.compact td:last-child {
+      padding-left: 32px;
+    }
+
+    .def-table td {
+      padding: 9px 24px 9px 0;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .def-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .def-table td:first-child {
+      white-space: nowrap;
+      color: #111;
+      width: 1%;
+    }
+
+    .def-table td:last-child {
+      color: #333;
+    }
+
+    .def-table td ul {
+      margin: 6px 0 0;
+      padding-left: 20px;
+    }
+
+    .def-table td li {
+      margin: 2px 0;
+    }
+
+    @media (max-width: 860px) {
+      .page {
+        grid-template-columns: 1fr;
+        margin: 0 auto;
+        padding: 24px 16px 40px;
+      }
+
+      aside.sidebar {
+        position: static;
+        max-height: none;
+        margin-bottom: 32px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+    .katex { font-size: 0.9em; }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    window.addEventListener('load', function () {
+      if (typeof renderMathInElement === 'function') {
+        renderMathInElement(document.body, {
+          delimiters: [{ left: '\\(', right: '\\)', display: false }]
+        });
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="page">
+    <aside class="sidebar">
+      <a class="home-link" href="../index.html">&larr; home</a>
+      <div class="toc-title">Contents</div>
+      <nav id="toc">
+        <a class="toc-main" href="#overview">Overview</a>
+        <a class="toc-sub" href="#nvfp4">NVFP4 Datatype</a>
+        <a class="toc-sub" href="#performance">Performance</a>
+
+        <a class="toc-main" href="#v1">Kernel 1</a>
+        <a class="toc-sub" href="#v1-tma">TMA</a>
+        <a class="toc-sub" href="#v1-tensor-cores">Tensor Cores &amp; Memory</a>
+        <a class="toc-sub" href="#v1-warp-spec">Warp Specialization</a>
+        <a class="toc-sub" href="#v1-mem-barriers">Memory Barriers</a>
+        <a class="toc-sub" href="#v1-mem-fences">Memory Fences</a>
+        <a class="toc-sub" href="#kernel-1">Implementation</a>
+
+        <a class="toc-main" href="#v2">Kernel 2</a>
+        <a class="toc-sub" href="#v2-tbc">Thread Block Clusters</a>
+        <a class="toc-sub" href="#v2-tma-multicast">TMA Multicast</a>
+        <a class="toc-sub" href="#v2-2sm-mma">2-SM MMA</a>
+        <a class="toc-sub" href="#v2-2cta-sync">2-CTA Synchronization</a>
+        <a class="toc-sub" href="#kernel-2">Implementation</a>
+
+        <a class="toc-main" href="#v3">Kernel 3</a>
+        <a class="toc-sub" href="#v3-persistent-kernels">Persistent Kernels</a>
+        <a class="toc-sub" href="#v3-persistent-pipeline">Persistent Pipeline</a>
+        <a class="toc-sub" href="#kernel-3">Implementation</a>
+
+        <a class="toc-main" href="#v4">Kernel 4</a>
+        <a class="toc-sub" href="#v4-bottleneck">Bottleneck</a>
+        <a class="toc-sub" href="#v4-redesign">Redesign</a>
+
+        <a class="toc-main" href="#v5">Kernel 5</a>
+        <a class="toc-sub" href="#v5-bottleneck">Bottleneck</a>
+        <a class="toc-sub" href="#v5-redesign">Redesign</a>
+
+        <a class="toc-main" href="#v6">Kernel 6</a>
+        <a class="toc-sub" href="#v6-gap">The Gap Between Grids</a>
+        <a class="toc-sub" href="#v6-pdl">PDL</a>
+        <a class="toc-sub" href="#kernel-6">Implementation</a>
+
+        <a class="toc-main" href="#production">Production Kernel</a>
+        <a class="toc-sub" href="#production-mma-n">MMA N size</a>
+        <a class="toc-sub" href="#production-swap-ab">Swap AB</a>
+        <a class="toc-sub" href="#production-scheduling">Static vs Dynamic Tile Scheduling</a>
+        <a class="toc-sub" href="#production-cta">1-CTA vs 2-CTA</a>
+        <a class="toc-sub" href="#production-supergroup">Supergroup Size</a>
+        <a class="toc-sub" href="#production-results">Results</a>
+      </nav>
+    </aside>
+    <main>
+    <h1>NVFP4 GEMM on Blackwell</h1>
+
+    <p class="repo-link"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><a href="https://github.com/aramesh10/B200-NVFP4-GEMM/tree/main">GitHub Repo</a></p>
+
+    <p class="repo-link x-link"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231ZM17.083 19.77h1.833L7.084 4.126H5.117Z"/></svg><a href="https://x.com/aramesh27">Aditya Ramesh</a></p>
+
+    <section class="version" id="overview">
+      <p>NVFP4 GEMM multiplies two matrices stored in NVIDIA&rsquo;s 4-bit floating-point format using block-level scaling.</p>
+
+      <div class="equation-card">
+        <span class="eq-body"><em>C</em> = (<em>A</em><sub>NVFP4</sub> <span class="eq-op">&#8857;</span> <em>S<sub>A</sub></em>)(<em>B</em><sub>NVFP4</sub> <span class="eq-op">&#8857;</span> <em>S<sub>B</sub></em>)</span>
+      </div>
+
+      <table class="operand-table">
+        <tbody>
+          <tr><td><em>A</em> &isin; &#8477;<sup>M&times;K</sup></td><td><code>NVFP4 E2M1</code></td></tr>
+          <tr><td><em>B</em> &isin; &#8477;<sup>K&times;N</sup></td><td><code>NVFP4 E2M1</code></td></tr>
+          <tr><td><em>S<sub>A</sub></em>, <em>S<sub>B</sub></em></td><td><code>FP8 E4M3</code>, 1 per 16 values</td></tr>
+          <tr><td><em>C</em> &isin; &#8477;<sup>M&times;N</sup></td><td><code>BF16</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="nvfp4">NVFP4 Datatype</h3>
+
+      <p>NVFP4 uses the <code>E2M1</code> format: 1 sign bit, 2 exponent bits, and 1 mantissa bit. This gives 16 representable values: <code>&plusmn;0, &plusmn;0.5, &plusmn;1, &plusmn;1.5, &plusmn;2, &plusmn;3, &plusmn;4, &plusmn;6</code>. Every 16 FP4 value has a FP8 scale factor to increase the accuracy and range when quantizing the values.</p>
+
+      <img class="figure figure-lg" src="nvfp4.svg" alt="NVFP4 format diagram" />
+
+      <h3 id="performance">Performance</h3>
+
+      <img class="figure figure-md" src="v1_v6_vs_cublas_8192.png" alt="Kernel 1 through 6 performance vs cuBLAS at 8192" />
+
+      <p>The blogpost will assume you have a basic understanding of NVIDIA GPU architecture. Here are some good resources to learn some basics:</p>
+
+      <ul>
+        <li><a href="https://developer.nvidia.com/blog/even-easier-introduction-cuda/">An Even Easier Introduction to CUDA</a></li>
+        <li><a href="https://siboehm.com/articles/22/CUDA-MMM">How to Optimize a CUDA Matmul Kernel for cuBLAS-like Performance: a Worklog</a></li>
+        <li><a href="https://brrrviz.com/">BrrrViz</a></li>
+      </ul>
+    </section>
+
+    <section class="version" id="v1">
+      <h2>Kernel 1 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v1.cuh" target="_blank" rel="noopener" aria-label="View v1.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+
+      <h3 id="v1-tma">Tensor Memory Accelerator (TMA)</h3>
+
+      <img class="figure figure-lg" src="tma.svg" alt="Tensor Memory Accelerator diagram" />
+      <p class="code-caption">TMA descriptor encodes layout related to the whole tensor and section transferred. For GEMM, we iterate through the K column through some block size. Depicted is the matrix A (M x K) and how it is iterated through for a particular output tile.</p>
+
+      <p>The <a href="https://developer.nvidia.com/blog/controlling-data-movement-to-boost-performance-on-ampere-architecture/">Ampere architecture introduced asynchronous copy</a> (<code>cp.async</code>), allowing overlap between memory transfer and compute. Every thread had to calculate the address of their own memory access before issuing an asynchronous copy, resulting in <a href="https://modal.com/gpu-glossary/device-hardware/tensor-memory-accelerator">register pressure and demand on the CUDA cores</a>.</p>
+
+      <pre><code>int tid = threadIdx.x;
+
+// Each thread computes its addresses.
+float* g_ptr = gmem + blockIdx.x * blockDim.x * 4 + tid * 4;
+uint32_t s_addr = __cvta_generic_to_shared(smem + tid * 4);
+
+// Each thread issues cp.async
+asm volatile(
+    "cp.async.ca.shared.global [%0], [%1], 16;"
+    :: "r"(s_addr), "l"(g_ptr)
+);</code></pre>
+      <p class="code-caption">Ampere's asynchronous copy</p>
+
+      <p>Since data is often accessed as a multi-dimensional array with a non-sequential access pattern, like a tile in a larger matrix, <strong><a href="https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/#:~:text=keys%20to%20performance%E2%80%8B.-,Tensor%20Memory%20Accelerator,-To%20help%20feed">Tensor Memory Accelerator (TMA)</a></strong> was introduced in the Hopper architecture to compute the address generation with a specialized hardware unit that handles different shapes, strides, and swizzling modes, bypassing the registers directly.</p>
+
+      <p>TMA is called with <code>cp.async.bulk.tensor</code>, which initiates the asynchronous copy from global memory to shared memory or vice versa. The PTX instruction requires a <code>CUtensorMap</code> object which encodes the memory layout, the tile layout, swizzling, and other characteristics. It is created on the <strong><em>host</em></strong> with <code>cuTensorMapEncodeTiled</code>. This object is passed on the <strong><em>device</em></strong> with <code>cp.async.bulk.tensor</code> along with the coordinate of the tile needed for transfer.</p>
+
+      <pre><code>// Host: encode the tile's shape, strides, and swizzling once.
+CUtensorMap tensor_map{};
+cuTensorMapEncodeTiled(
+    &amp;tensor_map, CU_TENSOR_MAP_DATA_TYPE_FLOAT16,
+    2, gmem_ptr, gmem_dims, gmem_strides,
+    tile_dims, tile_strides,
+    CU_TENSOR_MAP_INTERLEAVE_NONE,
+    CU_TENSOR_MAP_SWIZZLE_128B,
+    CU_TENSOR_MAP_L2_PROMOTION_L2_256B,
+    CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE);
+
+// Device: one thread issues the copy for the whole CTA.
+if (threadIdx.x == 0) {
+    asm volatile(
+        "cp.async.bulk.tensor.2d.shared::cluster.global.mbarrier::complete_tx::bytes"
+        " [%0], [%1, {%2, %3}], [%4];"
+        :: "r"(s_addr), "l"(&amp;tensor_map),
+           "r"(tile_x), "r"(tile_y), "r"(mbar_addr)
+    );
+}</code></pre>
+      <p class="code-caption">TMA bulk tensor copy</p>
+
+      <p><a href="https://arxiv.org/pdf/2501.12084v1">The general rule of thumb</a> is to use <code>cp.async</code> for smaller, irregular memory patterns or for 1D linear array copies, and <a href="https://modal-cdn.com/gpu-glossary/gtc22-whitepaper-hopper.pdf">TMA for bulk multi-dimensional tile movement</a>. For GEMM, we will use TMA.</p>
+
+      <blockquote><strong>Note:</strong> <a href="https://newsletter.semianalysis.com/i/191922559/async-copy-vs-tma-comparison">Semianalysis found empirically</a> TMA has higher throughput when more than 32 KiB are in-flight for Blackwell.</blockquote>
+
+      <h3 id="v1-tensor-cores">Tensor Cores and Tensor Memory</h3>
+
+      <p>Tensor cores perform matrix multiply-accumulate operations much more efficiently than cuda cores. In Blackwell, the key change from Hopper is that <code>tcgen05.mma</code> writes accumulators into Tensor Memory, or TMEM, instead of keeping the accumulator fragments in per-thread registers. <code>A</code>/<code>B</code> resides in SMEM, <code>SFA</code>/<code>SFB</code> resides in TMEM, and the accumulated results remains in TMEM.</p>
+
+      <p>TMEM was introduced in Blackwell for two reasons:</p>
+      <ol>
+        <li>Reducing register pressure</li>
+        <li>Decoupling the tensor-core accumulator state from the threads that issue the MMA.</li>
+      </ol>
+
+      <img class="figure figure-md figure-spaced" src="acc_tmem.svg" alt="Register file vs Tensor Memory capacity budget diagram" />
+
+      <p>In Hopper, WGMMA accumulators live in registers and the instruction is issued by a warpgroup of 4 warps. For the large Hopper shape <code>m64n256k16</code>, the accumulator tile has \(64\times256=16384\) FP32 elements. Distributed over 128 threads, this is \(16384/128=128\) FP32 accumulator registers per thread for just the MMA itself.</p>
+      
+      <img class="figure figure-lg" src="hopper_vs_blackwell_pipeline.svg" alt="Hopper vs Blackwell pipeline diagram" />
+
+      <p>This makes larger MMA tiles register-limited. A hypothetical register-resident <code>m128n256</code> accumulator would require 128&times;256/128=256 FP32 accumulator registers per thread, already exceeding the per-thread register budget. Blackwell avoids this by placing the accumulator in TMEM. The MMA can be issued by a single elected thread/CTA path, while the completed accumulator is later loaded from TMEM into registers for the epilogue and stored to GMEM. This enables larger tensor-core tiles and cleaner overlap between the mainloop and epilogue/pipeline work.</p>
+
+      <img class="figure figure-lg" src="tmem.svg" alt="Tensor Memory layout diagram" />
+
+      <p>Tensor Memory is organized as a two-dimensional matrix, with 512 columns and 128 lanes of 32-bit cells per CTA. The FP32 accumulator occupies columns [0, 256) and the five buffers for <code>SFA</code>/<code>SFB</code> occupies the rest. A buffer of scale factors take 48 columns, 16 for <code>SFA</code> and 32 for <code>SFB</code>, for an output tile size of <code>128 x 256</code></p>
+
+      <p>For NVFP4 MMA, the <code>A</code> and <code>B</code> tile along with their scale factors <code>SFA</code> and <code>SFB</code> are required for the tensor core. Specifically, <code>A</code> and <code>B</code> can reside in SMEM while <code>SFA</code> and <code>SFB</code> must reside in TMEM. <a href="https://research.colfax-intl.com/cutlass-tutorial-hardware-supported-block-scaling-with-nvidia-blackwell-gpus/">Colfax's article</a> on Blackwell block-scaling covers this layout in depth.</p>
+
+      <p>Moving <code>SFA</code> and <code>SFB</code> into TMEM is done with <code>tcgen05.cp</code>, which copies data asynchronously from shared memory to Tensor Memory. For block-scaled <code>tcgen05.mma</code>, <code>scale_A</code> and <code>scale_B</code> reside in TMEM.</p>
+
+      <p>For our scale-factor copy path, we use:</p>
+
+      <pre><code>tcgen05.cp.cta_group.shape{.multicast}{.dst_fmt.src_fmt} [taddr], s-desc;
+
+.cta_group = { .cta_group::1, .cta_group::2 }
+.src_fmt   = { .b6x16_p32 , .b4x16_p64 }
+.dst_fmt   = { .b8x16 }
+.shape     = { .128x256b, .4x256b, .128x128b, .64x128b**, .32x128b*** }
+.multicast = { .warpx2::02_13** , .warpx2::01_23**, .warpx4*** }</code></pre>
+
+      <p>The <code>.32x128b</code> shape means the copy covers 32 Tensor Memory lanes, with 128 bits of data across the TMEM columns. NVIDIA requires <code>.32x128b</code> copies to use <code>.warpx4</code>; this multicasts the copied data into all four warps.</p>
+
+      <p>This is needed because block-scaled MMA consumes the scale factors from TMEM, and <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-block-scaling:~:text=Scale%20factors%20for%20A%20and%20B%20matrices%20need%20to%20be%20duplicated%20to%20all%2032%20lane%20partitions%20of%20tensor%20memory.">the scale factors for A and B must be duplicated across the TMEM lane partitions used by the MMA</a>. Using <code>.warpx4</code> performs this duplication with one multicast copy instead of issuing separate copies per warp. The size is sufficient for the largest MMA tile sizes.</p>
+
+      <h3 id="v1-warp-spec">Warp Specialization</h3>
+
+      <p>We have asynchronous instructions so we can create a software pipeline. A thread block is composed of many warps, groups of 32 threads that execute the code in a <em>Single-Instruction Multiple-Threads</em> (SIMT) paradigm, where each thread executes the same instructions. Since all threads in a warp execute the same instructions, if there is a branch, threads that fail to pass the predicate will be masked off, often called <em>warp divergence</em>.</p>
+
+      <p>To maximize utilization, we generally minimize <em>warp divergence</em>. When constructing this software pipeline, we will do so at the granularity of warps in a process called <strong><em>warp specialization</em></strong>, where each warp gets a role. For NVFP4 GEMM, it will look like the following:</p>
+
+      <pre><code>if (warp == TILE TMA WARP) {
+    Issue TMA COPY for A, B (GMEM -&gt; SMEM)
+}
+if (warp == SCALING TMA WARP) {
+    Issue TMA COPY for SFA, SFB (GMEM -&gt; SMEM)
+}
+else if (warp == MMA WARP) {
+    Copy SFA, SFB (SMEM -&gt; TMEM)
+    Issue MMA
+}
+else if (warp == EPILOGUE WARP) {
+    Copy output (TMEM -&gt; GMEM)
+}</code></pre>
+
+      <p>For reasons we will see later, we will have a warp handle TMA for <code>A</code>/<code>B</code> and <code>SFA</code>/<code>SFB</code> separately. For Blackwell, we are able to separate the <code>MMA WARP</code> and <code>EPILOGUE WARP</code> because Tensor Memory allows us to decouple the two, so we can have part of the epilogue's work overlap with the next MMA call.</p>
+
+      <h3 id="v1-mem-barriers">Memory Barriers</h3>
+
+      <p>Memory barriers allows us to construct this software pipeline. An <code>mbarrier</code> object is used to synchronize threads and track asynchronous memory operations. A set of threads will <em>wait</em> on a barrier. A different set of threads will <em>arrive</em> at the barrier and signal its completion. The waiting set will then be able to proceed through its computation.</p>
+
+      <p>We can track whether the mbarrier is ready through a phase bit. An <code>mbarrier</code> is initialized at phase <code>0</code>. A set of threads will <em>wait</em> on phase <code>0</code>. Another set of threads will <em>arrive</em> at this barrier and increment the phase counter to phase <code>1</code>. The waiting set will then see the phase has flipped to <code>1</code> and proceed. We explicitly tell the threads what phase to wait on. After this, we tell the thread to wait on phase <code>1</code>, which will then get flipped to phase <code>0</code> on arrival.</p>
+
+      <p>There are two mechanisms to <em>arrive</em> at a barrier. The first is a set of threads signals their arrivals. The second is a set of threads indicate a certain number of bytes will be transferred during a TMA (<code>cp.async.bulk</code>) instruction. When the number of bytes reached its destination, the barrier will signal arrival.</p>
+
+      <h4>Initialization</h4>
+
+      <p>An <code>mbarrier</code> object is 8 bytes stored in shared memory.</p>
+
+      <pre><code>mbarrier.init.b64 [addr], count;</code></pre>
+      <pre><code>addr: address of the mbarrier object
+count: number of arrival signals needed before phase change</code></pre>
+
+      <p>The <code>mbarrier</code> object is initialized with phase <code>0</code>.</p>
+
+      <p class="src-link"><a href="https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-init">https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-init</a></p>
+
+      <h4>Arrival</h4>
+
+      <p>A thread can signal arrival</p>
+
+      <pre><code>mbarrier.arrive.b64 state, [addr]{, count};</code></pre>
+      <pre><code>state: returned phase of the mbarrier before this arrive operation
+addr: address of the mbarrier object
+count: number of arrival signals</code></pre>
+
+      <p>or it can signal that the barrier needs to wait for some asynchronous transaction with <code>txCount</code> bytes to complete</p>
+
+      <pre><code>mbarrier.expect_tx.b64 [addr], txCount;</code></pre>
+
+      <p>where we attach <code>mbarrier::complete_tx::bytes</code> to <code>cp.async.bulk.tensor</code></p>
+
+      <p class="src-link"><a href="https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive">https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive</a></p>
+
+      <h4>Wait</h4>
+
+      <p>Meanwhile, a thread waits on the barrier. We do a <em>spin-wait</em> on an mbarrier phase</p>
+
+      <pre><code>{
+    .reg .pred p;
+
+wait:
+    mbarrier.try_wait.parity.acquire.cta.shared::cta.b64
+        p, [addr], phase, 0x989680;
+
+    @p bra done;
+    bra wait;
+
+done:
+}</code></pre>
+
+      <p>Where this can be read as</p>
+      <pre><code>Check whether the CTA-shared mbarrier at [addr]
+has completed the phase with parity = phase.
+If yes, set p = true.
+If no, set p = false after the try-wait attempt.
+loop until p is true</code></pre>
+
+      <p class="src-link"><a href="https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait">https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait</a></p>
+
+      <h3 id="v1-mem-fences">Memory Fences</h3>
+
+      <p>CUDA assumes <a href="https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/cpp-language-extensions.html#memory-fence-functions">weakly ordered memory model</a>, so the order of writing and reading of a variable by one thread is not guaranteed with the writing or reading of another thread.</p>
+
+      <p>Borrowing the example from <a href="https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/cpp-language-extensions.html#memory-fence-functions">here</a>:</p>
+
+      <pre><code>__device__ int X = 1, Y = 2;
+
+__device__ void writeXY() {
+    X = 10;
+    Y = 20;
+}
+
+__device__ void readXY() {
+    int B = Y;
+    int A = X;
+}</code></pre>
+
+      <p>The values of <code>A</code> and <code>B</code> are not guaranteed. We can add a memory fence to guarantee ordering. This can be done at one of three scope levels described <a href="https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/cpp-language-extensions.html#memory-fence-functions">here</a>:</p>
+
+      <pre><code>void __threadfence_block();     // block-level
+void __threadfence();           // device-level
+void __threadfence_system();    // system-level</code></pre>
+
+      <p>so we can insert memory fence like so:</p>
+
+      <pre><code>__device__ int X = 1, Y = 2;
+
+__device__ void writeXY() {
+    X = 10;
+    __threadfence();
+    Y = 20;
+}
+
+__device__ void readXY() {
+    int B = Y;
+    __threadfence();
+    int A = X;
+}</code></pre>
+
+      <p>The fence guarantees ordering: if <code>readXY</code> observes <code>B = 20</code>, it must also observe <code>A = 10</code>. Without the fence, <code>B = 20, A = 1</code> is a legal outcome.</p>
+
+      <p>This kernel never calls <code>__threadfence</code> directly, but the same idea appears in two specialized forms. <code>fence.proxy.async</code> orders our SMEM writes before a TMA store reads them - the TMA engine accesses memory through a different <em>proxy</em> than ordinary loads and stores, so a plain fence is not enough. <code>tcgen05.fence::after_thread_sync</code> orders TMEM reads after a synchronization point. Both show up in the epilogue below.</p>
+
+      <h2 id="kernel-1">Implementation</h2>
+
+      <p>For tiling logic and intuition, I will recommend you to read <a href="https://www.modular.com/blog/matrix-multiplication-on-nvidias-blackwell-part-1-introduction">Modular's blog on GEMM</a>. Also check the actual kernel implementation since I tried to write code that explains itself. Before the warp specialization we initialize variables needed, including the following memory barriers, and the MMA warp allocates the CTA's 512 TMEM columns with <code>tcgen05.alloc</code>.</p>
+
+      <h5>Memory barriers</h5>
+
+      <table class="def-table">
+        <tbody>
+          <tr><td><code>tile_mbar</code></td><td>signals A/B tiles arrived in <code>stage</code>-th SMEM buffer.</td></tr>
+          <tr><td><code>scale_mbar</code></td><td>signals SFA/SFB tiles arrived in <code>stage</code>-th SMEM buffer.</td></tr>
+          <tr><td><code>mma_mbar</code></td><td>signals MMA is done with the <code>stage</code>-th SMEM buffer, so it can be refilled.</td></tr>
+          <tr><td><code>tmem_done</code></td><td>signals every MMA has completed and the accumulator in TMEM is final.</td></tr>
+        </tbody>
+      </table>
+
+      <h5>Tile sizing</h5>
+
+      <table class="def-table">
+        <tbody>
+          <tr>
+            <td><code>MMA_M</code>, <code>MMA_N</code>, <code>MMA_K</code></td>
+            <td>M, N, K size of one tensor core operation. <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-kind-shapes">B200 supported sizes for block-scaled NVFP4 MMA</a>:
+              <ul>
+                <li><code>MMA_M</code> = 128</li>
+                <li><code>MMA_N</code> = {8, 16, ..., 256} in steps of 8</li>
+                <li><code>MMA_K</code> = 64</li>
+              </ul>
+            </td>
+          </tr>
+          <tr>
+            <td><code>BLOCK_M</code>, <code>BLOCK_N</code>, <code>BLOCK_K</code></td>
+            <td>M, N, K size of the tile handled by the CTA. This kernel uses:
+              <ul>
+                <li><code>BLOCK_M</code> = 128</li>
+                <li><code>BLOCK_N</code> = 256</li>
+                <li><code>BLOCK_K</code> = 256</li>
+              </ul>
+              Each K iteration issues <code>BLOCK_K / MMA_K</code> = 4 MMA instructions of shape 128 x 256 x 64 against one SMEM stage.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h5>Pipeline stages</h5>
+
+      <p>SMEM holds <code>NUM_STAGES = 4</code> copies of the A/B/SFA/SFB buffers, indexed by <code>stage = iter_k % 4</code>. The TMA warps run ahead and fill stages while the MMA warp drains them. Once all 4 stages have been filled, a TMA warp must wait on <code>mma_mbar[stage]</code> before overwriting that stage - this is the backpressure that keeps producers and consumer in step. Since an mbarrier just alternates between phase 0 and 1, the phase to wait on is <code>(iter_k / NUM_STAGES) &amp; 1</code>.</p>
+
+      <p>We launch the kernel with 7 warps. Each warp's role is described below:</p>
+
+      <table class="def-table compact">
+        <tbody>
+          <tr><td>Warp 6</td><td>A/B TMA</td></tr>
+          <tr><td>Warp 5</td><td>SFA/SFB TMA</td></tr>
+          <tr><td>Warp 4</td><td>MMA</td></tr>
+          <tr><td>Warp 3-0</td><td>Epilogue</td></tr>
+        </tbody>
+      </table>
+
+      <h5>TMA Warps</h5>
+
+      <p>Warp 6 and 5 follow the form:</p>
+
+      <pre><code>for each k tile:
+    indexing computation
+    wait for mma_mbar
+    set txCount for arrival of tile_mbar/scale_mbar
+    tma load tile</code></pre>
+
+      <h5>MMA Warp</h5>
+
+      <pre><code>for each k tile:
+    indexing computation
+    wait for tile_mbar
+    wait for scale_mbar
+    copy SFA and SFB into TMEM (tcgen05.cp)
+    issue MMAs (tcgen05.mma)
+    commit completion to mma_mbar (tmem_done on the last iteration)</code></pre>
+
+      <p><code>SFA</code> and <code>SFB</code> must reside in <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/index.html?highlight=block%2520scaled#tcgen05-block-scaling">TMEM</a>. We place this copy in this warp because <code>tcgen05.mma</code> is <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-memory-consistency-model-pipelined-instructions">implicitly pipelined</a> with <code>tcgen05.cp</code>. This is explained nicely in <a href="https://hazyresearch.stanford.edu/blog/2026-02-19-tk-2">this Thunderkitten's article</a>, which I recommend reading. Having one warp handle the <code>tcgen05.cp</code> and <code>tcgen05.mma</code> simplifies the logic: both go down the same in-order tensor-core pipe, so no extra synchronization is needed between the copy and the MMA that consumes it.</p>
+
+      <p><code>tcgen05.commit</code> signals the completion of a set of asynchronous <code>tcgen05</code> operations. For the completion of a k tile, we will signal that the <code>A</code>/<code>B</code>/<code>SFA</code>/<code>SFB</code> tile are free and at the end, we will signal the completion of the output tile's accumulated result.</p>
+
+      <h5>Epilogue Warps</h5>
+
+      <pre><code>wait for tmem_done
+fence for TMEM reads
+for each 64-column sub-tile:
+    load accumulator fragment from TMEM into registers (tcgen05.ld)
+    convert fp32 to bf16, store into SMEM staging buffer
+    fence, then one elected lane issues the TMA store to GMEM</code></pre>
+
+      <p>The output tile in TMEM is 128 lanes x 256 columns of fp32. <code>tcgen05.ld</code> reads 32 lanes per warp, so we use 4 warps (128 threads), each owning 32 rows. The <code>tmem_done</code> wait tells us the accumulator is final, and <code>tcgen05.fence::after_thread_sync</code> orders our TMEM reads after that synchronization.</p>
+
+      <p>Rather than storing registers directly to global memory, each warp stages its fragment in SMEM and one elected lane (<code>elect.sync</code>) issues a single bulk TMA store. The <code>fence.proxy.async</code> before the store makes the SMEM writes visible to the TMA engine. The epilogue is also where we would fuse activation functions or other element-wise operations, while the accumulator sits in registers.</p>
+
+    </section>
+
+    <section class="version" id="v2">
+      <h2>Kernel 2 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v2.cuh" target="_blank" rel="noopener" aria-label="View v2.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+
+      <p>We can improve on the previous implementation with threadblock clusters. A <code>128 x 256</code> output tile is the largest tile one CTA can compute. With the introduction of distributed shared memory, we can reduce a large number of redundant loads. Blackwell lets two SMs cooperate on a single MMA instruction. In v2, a pair of CTAs computes one <code>256 x 256</code> output tile together using <code>tcgen05.mma.cta_group::2</code>.</p>
+
+      <h3 id="v2-tbc">Thread Block Clusters</h3>
+
+      <p>Cooperative Thread Arrays (CTAs) correspond to thread blocks. Hopper introduced <em>thread block clusters</em>, allowing the user to schedule thread blocks together on the same GPU Processing Cluster (GPC), where each CTA can access the shared memory of every other CTA in the cluster, called <em><a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#cluster-of-cooperative-thread-arrays">distributed shared memory</a></em>.</p>
+
+      <h4>Relevant PTX</h4>
+
+      <ul>
+        <li><code>mapa.shared::cluster</code> - maps an SMEM address in our CTA to the same location in a peer CTA.</li>
+        <li><code>barrier.cluster.arrive</code> / <code>barrier.cluster.wait</code> - synchronize the cluster.</li>
+        <li>mbarrier operations take a <code>.cluster</code> scope, so a barrier living in one CTA can be armed, arrived at, and waited on from the other.</li>
+      </ul>
+
+      <p>We launch with <code>__cluster_dims__(2, 1, 1)</code> so CTAs pair up. We will call CTA 0 of the pair the <strong>leader</strong> and CTA 1 the <strong>follower</strong>.</p>
+
+      <p>Clusters unlock the two ideas of this version: multicasting loads and cooperating on the MMA.</p>
+
+      <h3 id="v2-tma-multicast">TMA Multicast</h3>
+
+      <p>TMA multicast loads a tile into multiple CTAs at once. Adding <code>.multicast::cluster</code> to <code>cp.async.bulk.tensor</code> along with a 16-bit CTA bitmask makes the hardware read the data from global memory/L2 <strong>once</strong> and deliver it into the <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-bulk-tensor">SMEM of every CTA in the mask</a>.</p>
+
+      <p>If each CTA handles its own memory transfer, the load is redundant. With multicast, one load serves both CTAs, halving the traffic for that tile.</p>
+
+      <h3 id="v2-2sm-mma">2-SM MMA</h3>
+
+      <p><code>tcgen05.mma.cta_group::2</code> doubles the M dimension of the MMA: one instruction, issued by a single thread in the leader, drives <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-kind-shapes">the tensor cores of <em>both</em> SMs</a>. Each SM's tensor core can read both CTAs' shared memory, so an <a href="https://www.modular.com/blog/matrix-multiplication-on-nvidias-blackwell-part-3-the-optimizations-behind-85-of-sota-performance">input tile</a> can be <a href="https://research.colfax-intl.com/cutlass-tutorial-gemm-with-thread-block-clusters-on-nvidia-blackwell-gpus/">split across the pair</a>.</p>
+
+      <p>Suppose we have the logical tile:</p>
+
+      <p><code>C[256 x 256] = A[256 x 64] @ B[64 x 256]</code></p>
+
+      <p>With two independent <code>cta_group::1</code> MMAs:</p>
+
+      <pre><code>CTA0 computes:
+  C0[128 x 256] = A0[128 x 64] @ B[64 x 256]
+CTA1 computes:
+  C1[128 x 256] = A1[128 x 64] @ B[64 x 256]</code></pre>
+
+      <p><code>B</code> is identical! Each CTA must hold the entire <code>B</code> tile in its own SMEM.</p>
+
+      <p>With one <code>cta_group::2</code> MMA, each CTA holds its 128 rows of <code>A</code> and <em>half</em> of <code>B</code> (128 of the 256 columns). The tensor cores read across the pair, and each CTA's TMEM accumulates its own 128 rows of the output.</p>
+
+      <p>We could instead multicast the full B tile into both CTAs and keep two independent MMAs, resulting in the same global-memory traffic, but each CTA still utilize their SMEM on the full tile. <code>cta_group::2</code> gives us both savings:</p>
+
+      <ul>
+        <li><strong>Half the B footprint per CTA.</strong> A pipeline stage shrinks from 54 KB (v1) to 38 KB, which lets us deepen the pipeline from 4 to 5 stages in the same SMEM budget.</li>
+        <li><strong>Half the instructions.</strong> One MMA covers 256 x 256 x 64, and only the leader's MMA warp issues work.</li>
+      </ul>
+
+      <h3 id="v2-2cta-sync">2-CTA Synchronization</h3>
+
+      <p>The two CTAs need to agree on when tiles arrive and when the MMA is done. Rather than giving each CTA its own barriers and relaying signals between them, we keep <strong>one</strong> barrier per event, stored in the leader's SMEM.</p>
+
+      <p>The <code>cta_group::2</code> instructions support this directly:</p>
+
+      <ul>
+        <li>A <code>cta_group::2</code> TMA load reports its bytes to a barrier in the leader's SMEM (<code>mapa</code> maps the address to CTA 0). Loads from <em>both</em> CTAs count on the same barrier, so the leader arms it with the pair-total byte count (<code>TILE_TX = 2 * (A_SIZE + B_SIZE)</code>).</li>
+        <li><code>tcgen05.commit.cta_group::2.multicast::cluster</code> signals MMA completion to both CTAs at once, so both CTAs' producer warps see the stage free up.</li>
+      </ul>
+
+      <p>With this, the leader's MMA warp waits only twice per K iteration: once for tiles, once for scales.</p>
+
+      <p>Two details keep this correct:</p>
+
+      <ol>
+        <li>Waits use <code>acquire.cluster</code> scope. The data was written by the peer CTA, so a cta-scope wait would not make it visible.</li>
+        <li>Barriers are initialized with <code>fence.mbarrier_init.release.cluster</code> followed by <code>cluster_sync()</code>, so neither CTA touches a barrier before the other has initialized it.</li>
+      </ol>
+
+      <h2 id="kernel-2">Implementation</h2>
+
+      <p>The grid is <code>{2 * num_m, num_n}</code> - one 2-CTA cluster per 256 x 256 output tile, so <code>m_idx = blockIdx.x / 2</code>. The warp layout inside each CTA is unchanged from v1 (7 warps). What each warp does differently:</p>
+
+      <h5>Warp 6 - A/B TMA</h5>
+
+      <p>Each CTA loads its own halves: its 128 rows of <code>A</code> and its 128 columns of <code>B</code>. No multicast - the halves are disjoint. All four loads (two per CTA) complete on the leader's <code>tile_mbar</code>.</p>
+
+      <h5>Warp 5 - SFA/SFB TMA</h5>
+
+      <p><code>SFA</code> is per-CTA, like <code>A</code>: each SM only computes its own 128 output rows, so it only needs its own M-half of the scales. The entire <code>SFB</code> is needed in each CTA. This is because it must get stored into TMEM, resulting in each CTA requiring its own local copy in SMEM. The load is multicast: each CTA loads its own 128-column half with mask <code>0x3</code>, and the hardware writes it into both CTAs' SMEM. Each half is read from L2 exactly once. All deliveries complete on the leader's <code>scale_mbar</code>.</p>
+
+      <h5>Warp 4 - MMA (leader only)</h5>
+
+      <p>The leader CTA runs:</p>
+
+      <pre><code>for each k tile:
+    wait for scale_mbar (cluster scope)
+    copy SFA and both SFB halves into TMEM (12x tcgen05.cp)
+    wait for tile_mbar (cluster scope)
+    issue MMAs (4x tcgen05.mma.cta_group::2)
+    commit to mma_mbar, multicast to both CTAs
+commit to tmem_done, multicast to both CTAs</code></pre>
+
+      <p>Note that it waits on the scales first: the scale tiles are small (6 KB vs 32 KB per CTA) and typically land first, so the <code>tcgen05.cp</code> calls are already queued on the tensor-core pipe while the A/B tiles are still in flight.</p>
+
+      <h5>Warps 3-0 - Epilogue</h5>
+
+      <p>Each CTA drains its own 128 rows of the output from its own TMEM. The path is the same as v1 - TMEM to registers, convert to bf16, stage in SMEM, TMA store - with <code>tmem_done</code> signaling that the accumulator is ready to read. One improvement: each warp now has two SMEM staging buffers (<code>EPI_BUFS = 2</code>), so it converts and stages the next fragment while the previous TMA store is still in flight. v1 waited for each store to complete before reusing its single buffer.</p>
+
+    </section>
+
+    <section class="version" id="v3">
+      <h2>Kernel 3 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v3.cuh" target="_blank" rel="noopener" aria-label="View v3.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+
+      <p>This version introduces persistent kernels. Instead of launching one cluster per output tile, we launch only as many clusters as fit on the GPU and let each one compute many tiles.</p>
+
+      <h3 id="v3-persistent-kernels">Persistent Kernels</h3>
+
+      <p>A B200 fits 74 of our 2-CTA clusters at a time. A 16384 x 16384 output has 4096 tiles. With one cluster per tile, the hardware runs the grid in <em>waves</em> of 74. The tile count rarely divides evenly, so the last wave runs partially filled while the rest of the GPU idles. This is called <em><a href="https://docs.nvidia.com/deeplearning/performance/dl-performance-matrix-multiplication/index.html">wave quantization</a></em>.</p>
+
+      <p>There is a second cost: every tile boundary kills the pipeline. A fresh CTA initializes its memory barriers, allocates TMEM, and issues its first TMA loads cold. The epilogue of one tile and the mainloop of the next live in different CTAs, so they cannot overlap. The tensor core sits idle at every boundary.</p>
+
+      <p>A <em>persistent kernel</em> launches <code>74</code> and each cluster walks the tile list with a grid stride:</p>
+
+      <pre><code>for (tile_id = cluster_idx; tile_id &lt; num_tiles; tile_id += num_clusters)</code></pre>
+
+      <p>Each warp keeps its role from Kernel 2 and simply gains this outer loop. Reusing the cluster removes the launch overhead, but it is not enough by itself: the pipeline must also continue from one output tile to the next without stopping and restarting.</p>
+
+      <h3 id="v3-persistent-pipeline">Persistent Pipeline</h3>
+
+      <p>Two pieces of state cross a tile boundary: the five-stage SMEM pipeline and the TMEM accumulator. Both must be reused safely for tile <code>t+1</code> while tile <code>t</code> finishes.</p>
+
+      <p>For the SMEM pipeline, all warps use one continuous K-iteration index:</p>
+
+      <pre><code>g     = tile_idx * NUM_ITERS + iter_k
+stage = g % NUM_STAGES
+phase = (g / NUM_STAGES) &amp; 1</code></pre>
+
+      <p>resulting in</p>
+
+      <pre><code>tile 0: g = 0, 1, 2
+tile 1: g = 3, 4, 5
+tile 2: g = 6, 7, 8</code></pre>
+
+      <p>where,</p>
+
+      <table class="def-table">
+        <tbody>
+          <tr><td><code>tile_idx</code></td><td>output tile index</td></tr>
+          <tr><td><code>iter_k</code></td><td>K-th iteration within output tile</td></tr>
+          <tr><td><code>stage</code></td><td>SMEM stage</td></tr>
+          <tr><td><code>phase</code></td><td>phase of barrier for SMEM stage</td></tr>
+        </tbody>
+      </table>
+
+      <p>Because <code>g</code> does not reset at the tile boundary, the producer warps can load tile <code>t+1</code> into stages released by tile <code>t</code>'s MMA warp. The SMEM slots and their barriers keep cycling without per-tile reinitialization.</p>
+
+      <p>TMEM needs an explicit handoff. Tile <code>t+1</code> must not overwrite tile <code>t</code>'s accumulator until the epilogue has finished reading it. We add one memory barrier for this:</p>
+
+      <table class="def-table">
+        <tbody>
+          <tr><td><code>output_mbar</code></td><td>signals the epilogue is done <em>reading</em> the accumulator. The MMA warp waits on it before a tile's first MMA.</td></tr>
+        </tbody>
+      </table>
+
+      <p>The release needs a fence. <code>tcgen05.fence::before_thread_sync</code> is the mirror of the <code>after_thread_sync</code> fence from Kernel 1: it orders our TMEM reads <em>before</em> the <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-memory-consistency-model">arrival that the MMA warp will observe</a>.</p>
+
+      <h2 id="kernel-3">Implementation</h2>
+
+      <p>Only the following changed from Kernel 2:</p>
+
+      <h5>Grid</h5>
+
+      <p>The host launches <code>min(num_tiles, cudaOccupancyMaxActiveClusters)</code> clusters instead of one per tile. Every warp's body is wrapped in the grid-stride tile loop, walking tiles along M first (<code>m_idx = tile_id % num_m</code>).</p>
+
+      <h5>Continuous tile-to-tile pipeline</h5>
+
+      <p>All stage and phase indexing switches from <code>iter_k</code> to the continuous counter <code>g</code>, so the SMEM ring and its barriers run uninterrupted across tiles. <code>output_mbar</code> completes the transition by protecting TMEM reuse: the MMA warp waits at the start of each tile, and each epilogue warp arrives immediately after its last <code>tcgen05.ld</code> retires.</p>
+
+      <h5>Per-tile mainloop barrier</h5>
+
+      <p>The MMA warp commits to <code>tmem_done</code> after each tile's last MMA, and its phase alternates with <code>tile_idx</code>, so the epilogue knows when each tile's accumulator is ready.</p>
+
+    </section>
+
+    <section class="version" id="v4">
+      <h2>Kernel 4 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v4.cuh" target="_blank" rel="noopener" aria-label="View v4.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+      <p>v3 uses four epilogue warps per CTA. Each warp owns 32 output rows and drains four 64-column fragments:</p>
+
+      <pre><code>TMEM read -&gt; wait -&gt; convert to BF16 -&gt; SMEM -&gt; TMA store</code></pre>
+
+      <p>This sequence repeats for every fragment. After its last TMEM read, each warp arrives on <code>tmem_empty</code>, allowing the next tile to reuse the accumulator. Across the two-CTA cluster, <code>tmem_empty</code> therefore waits for eight arrivals.</p>
+
+      <h3 id="v4-bottleneck">Bottleneck</h3>
+
+      <p>The v3 NCU report shows that the SMEM epilogue is heavily bank-conflicted:</p>
+
+      <table>
+        <thead><tr><th>Metric</th><th class="num">v3 at 8192&sup3;</th></tr></thead>
+        <tbody>
+          <tr><td>Shared wavefronts</td><td class="num">16.78 M</td></tr>
+          <tr><td>Ideal shared wavefronts</td><td class="num">1.05 M</td></tr>
+          <tr><td>Excess shared wavefronts</td><td class="num">15.73 M</td></tr>
+          <tr><td>Thread instructions</td><td class="num">460.78 M</td></tr>
+          <tr><td>Long-scoreboard stall ratio</td><td class="num">13.68</td></tr>
+        </tbody>
+      </table>
+
+      <p>The epilogue produces 16.8 M shared wavefront compared to the ideal 1.1 M. This means that bank conflicts within shared memory is causing serialization almost 16 times more than ideal. We also see stall waiting on TMEM to complete its memory transfer as each read is followed by a store before the next read.</p>
+
+      <pre><code>read 0 -&gt; store 0 -&gt; read 1 -&gt; store 1 -&gt; read 2 -&gt; store 2 -&gt; read 3</code></pre>
+
+      <h3 id="v4-redesign">Redesign</h3>
+
+      <p>We redesign the epilogue to read TMEM entirely first before doing any computation or stores. We increase the fragment width from 64 to 128 columns.</p>
+
+      <pre><code>for each fragment:
+    issue tcgen05.ld
+
+wait for all reads
+release tmem_empty</code></pre>
+
+      <p>Next, v4 converts all FP32 values to packed BF16. It then uses <code>stmatrix</code> to stage them into a 128-byte-swizzled SMEM tile, followed by a TMA store to contiguous row-major C:</p>
+
+      <pre><code>TMEM -&gt; REG -&gt; BF16 -&gt; stmatrix -&gt; swizzled SMEM -&gt; TMA -&gt; GMEM</code></pre>
+
+      <p>The batched reads increase register use from 77 to 190 registers per thread, but eliminate the shared-memory conflicts:</p>
+
+      <table>
+        <thead><tr><th>Metric</th><th class="num">v3</th><th class="num">v4</th></tr></thead>
+        <tbody>
+          <tr><td>Runtime</td><td class="num">490.9 us</td><td class="num">416.5 us</td></tr>
+          <tr><td>Excess shared wavefronts</td><td class="num">15.73 M</td><td class="num">0</td></tr>
+          <tr><td>Thread instructions</td><td class="num">460.78 M</td><td class="num">409.78 M</td></tr>
+          <tr><td>Tensor-pipe activity</td><td class="num">59.20%</td><td class="num">79.53%</td></tr>
+        </tbody>
+      </table>
+
+      <p>The redesigned epilogue is 15.2% faster at 8192&sup3;.</p>
+    </section>
+
+    <section class="version" id="v5">
+      <h2>Kernel 5 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v5.cuh" target="_blank" rel="noopener" aria-label="View v5.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+      <p>v4 launches 74 persistent clusters. Each cluster walks a fixed grid stride, visiting every M tile for one N strip before moving to the next strip:</p>
+
+      <pre><code>for (tile_id = cluster_idx; tile_id &lt; num_tiles; tile_id += num_clusters)</code></pre>
+
+      <p>The tile order and each cluster's work are fixed at launch.</p>
+
+      <h3 id="v5-bottleneck">Bottleneck</h3>
+
+      <p>The M-first order streams A through L2 once per N strip. This is cheap while the inputs fit in L2, but causes repeated DRAM loads once they do not:</p>
+
+      <table class="def-table" style="width: fit-content; margin-left: auto; margin-right: auto;">
+        <tbody>
+          <tr><td>8192&sup3;</td><td>67 MiB input footprint</td></tr>
+          <tr><td>16384&sup3;</td><td>268 MiB input footprint</td></tr>
+          <tr><td>B200 L2</td><td>~133 MiB</td></tr>
+        </tbody>
+      </table>
+
+      <p>The static assignment also creates a tail: a slow cluster keeps all of its remaining tiles while faster clusters finish and become idle.</p>
+
+      <h3 id="v5-redesign">Redesign</h3>
+
+      <p><strong>Supergroup ordering</strong> visits several N tiles for the same M tile before advancing M:</p>
+
+      <pre><code>v4: (m0,n0), (m1,n0), ... (m0,n1), (m1,n1), ...
+v5: (m0,n0), (m0,n1), ... (m1,n0), (m1,n1), ...</code></pre>
+
+      <p><code>supergroup</code> is the number of adjacent N tiles in one band. For example, <code>supergroup=4</code> visits</p>
+
+      <pre><code>(m0,n0), (m0,n1), (m0,n2), (m0,n3),
+(m1,n0), (m1,n1), (m1,n2), (m1,n3), ...</code></pre>
+
+      <p>before moving to the next four N tiles. In the case where there are 8 CTAs, a <code>supergroup</code> of 1 would result in <code>A[0:7, :]</code> and <code>B[0, :]</code> in L2 cache, resulting in zero reuse and L2 misses. When a <code>supergroup</code> of 4 is used, <code>A[0:1, :]</code> and <code>B[0:4, :]</code> is in L2 cache, where the reuse of <code>A</code> and <code>B</code> tiles would result in a L2 cache hit, reducing the time for the memory read.</p>
+
+      <p>At 8K, both inputs fit in L2, so choice of <code>supergroup</code> does not matter as much. At 16K, the inputs exceed L2 and <code>supergroup=16</code> was found empirically to perform the best.</p>
+
+      <p><strong>Cluster Launch Control (CLC)</strong> replaces the fixed grid stride. The full logical grid is launched, and each resident cluster cancels a pending cluster and takes its tile ID:</p>
+
+      <pre><code>finish tile -&gt; cancel pending cluster -&gt; take its tile -&gt; continue</code></pre>
+
+      <p>Tiles are assigned to the cluster becomes free first rather than in a fixed loop fashion.</p>
+
+      <p>The NCU reports show the two problem shapes with CLC and it's optimized supergroup:</p>
+
+      <table>
+        <thead><tr><th>Shape</th><th>Metric</th><th class="num">v4</th><th class="num">v5</th></tr></thead>
+        <tbody>
+          <tr><td>8192&sup3;</td><td>Runtime</td><td class="num">416.5 us</td><td class="num">409.7 us</td></tr>
+          <tr><td></td><td>L2 hit rate</td><td class="num">81.96%</td><td class="num">77.57%</td></tr>
+          <tr><td>16384&sup3;</td><td>Runtime</td><td class="num">4375.5 us</td><td class="num">2977.2 us</td></tr>
+          <tr><td></td><td>L2 hit rate</td><td class="num">31.83%</td><td class="num">84.65%</td></tr>
+          <tr><td></td><td>DRAM utilization</td><td class="num">67.05%</td><td class="num">13.76%</td></tr>
+          <tr><td></td><td>Tensor-pipe activity</td><td class="num">78.08%</td><td class="num">92.33%</td></tr>
+        </tbody>
+      </table>
+
+      <p>At 8K, v5 improves runtime by only 1.6% because supergroup ordering cannot improve an already L2-resident workload. At 16K, v5 is 32.0% faster as locality becomes important.</p>
+
+    </section>
+
+    <section class="version" id="v6">
+      <h2>Kernel 6 <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/blob/main/versions/v6.cuh" target="_blank" rel="noopener" aria-label="View v6.cuh on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+
+      <h3 id="v6-gap">The Gap Between Grids</h3>
+
+      <p>Back-to-back kernels on one stream serialize: kernel <code>n+1</code>'s first block starts only after kernel <code>n</code> fully completes. For GEMMs this is worse than it sounds because of how a persistent grid ends. The last few tiles finish at different times, and while the final clusters drain their epilogues, most of the GPU is already idle. The next GEMM - in an inference workload, usually queued right behind - is not allowed to start.</p>
+
+      <h3 id="v6-pdl">PDL</h3>
+
+      <p><em>Programmatic Dependent Launch</em> (PDL) relaxes this with <a href="https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#programmatic-dependent-launch-and-synchronization">one launch attribute</a> and <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol">two device-side instructions</a>:</p>
+
+      <pre><code>griddepcontrol.launch_dependents;
+griddepcontrol.wait;</code></pre>
+
+      <table class="def-table">
+        <tbody>
+          <tr><td><code>launch_dependents</code></td><td>this CTA votes to release the next grid. Once every CTA of grid <code>n</code> has voted (or finished), grid <code>n+1</code> launches - while grid <code>n</code> is still draining.</td></tr>
+          <tr><td><code>wait</code></td><td>blocks until the previous grid's release has completed, which guarantees its global-memory writes are visible. Everything <em>before</em> this call runs concurrently with the previous grid's tail.</td></tr>
+        </tbody>
+      </table>
+
+      <p>The host opts in by setting <code>cudaLaunchAttributeProgrammaticStreamSerialization</code> on the launch.</p>
+
+      <p>We arrive as late as possible: each CTA's store leader calls <code>launch_dependents</code> only after its last tile's stores complete. At that point this CTA contributes no more output traffic, even though sibling clusters may still be working. We also wait as late as possible: only the two TMA producer warps call <code>wait</code>, right before their first loads. The next GEMM might consume this GEMM's output, so the loads must be ordered after it. The whole prologue (barrier init, TMEM allocation, tensor-map prefetch) runs for free under the previous grid's tail wave.</p>
+
+      <blockquote><strong>Note:</strong> This overlap is invisible to per-kernel profilers like NCU, which serialize kernels to measure them. To see it, measure the gaps between kernels (CUPTI timestamps) or wall-clock a back-to-back sequence. During an experiment, a CUPTI timestamp was placed on the v5 and v6 kernel's start and end. Over multiple iterations, v5 found a +0.26 to +0.29 \(\mu\text{s}\) gap between the end of the previous kernel's end and the next kernel's start. For v6, there was a gap of -1.09 to -1.12 \(\mu\text{s}\), meaning kernel N+1's recorded start occured before the end of kernel N!</blockquote>
+
+      <h2 id="kernel-6">Implementation</h2>
+
+      <p>Only the following changed from Kernel 5 - three lines of device code and one launch attribute:</p>
+
+      <table class="def-table">
+        <tbody>
+          <tr><td>Wait</td><td><code>pdl_wait()</code> at the top of both TMA producer warps, before any load.</td></tr>
+          <tr><td>Arrive</td><td><code>pdl_arrive()</code> by each CTA's store leader after its final tile's stores.</td></tr>
+          <tr><td>Launch</td><td>The host sets <code>programmaticStreamSerializationAllowed = 1</code>.</td></tr>
+        </tbody>
+      </table>
+
+      <p>The win is largest at small sizes, where the tail wave is a big fraction of the runtime, and fades toward 16K, where thousands of tiles amortize one grid boundary.</p>
+
+    </section>
+
+    <section class="version" id="production">
+      <h2>Production Kernel <a class="gh-link" href="https://github.com/aramesh10/B200-NVFP4-GEMM/tree/main/reference" target="_blank" rel="noopener" aria-label="View reference folder on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a></h2>
+
+      <p>When developing the kernel through the different versions, we were targeting the compute-bound case, specifically when M=N=K=8192. We often encounter GEMMs of different shapes, especially in ML models, where certain GEMMs may be memory-bound and require a different strategy.</p>
+
+      <p>We can take our implementation and refactor it to allow different choices of kernel parameters. For NVFP4 GEMM, we have the following:</p>
+
+      <ul>
+        <li><code>MMA_N</code> size</li>
+        <li>Swap AB</li>
+        <li>1-CTA vs 2-CTA</li>
+        <li>CLC</li>
+        <li>Supergroup Size</li>
+      </ul>
+
+      <p>Different kernel libraries take different approaches to selecting the best config for a given M, N, K shape. <a href="https://github.com/flashinfer-ai/flashinfer/blob/4b969c9363e0d32a33f8fcccd9ef5a5fec51cd9f/flashinfer/gemm/kernels/utils.py#L104">FlashInfer</a> scores a set of parameters and selects the configuration with the best score. <a href="https://github.com/deepseek-ai/DeepGEMM/blob/main/csrc/jit_kernels/heuristics/sm100.hpp#L241">DeepGEMM</a> creates a set of valid configurations then compares configurations, choosing the best configuration from a set of rules, prioritizing a smaller number of SM waves, multicast, and more stages. <a href="https://github.com/NVIDIA/TensorRT-LLM/blob/main/tensorrt_llm/_torch/custom_ops/cutedsl_matmul_heuristics.py">TensorRT-LLM</a> also follows a similar pattern, creating a set of configurations then pruning and ranking. It also empirically benchmarks the finalists and chooses the fastest measured configuration. <a href="https://github.com/modular/modular/blob/8b5fec561746b218993c7a1cca71ba94fa4723cd/max/kernels/src/linalg/matmul/gpu/sm100/block_scaled_dispatch.mojo#L68">Mojo</a> selects its config from a set of tables before falling back on heuristics for the remaining cases. For our kernel, we will motivate a heuristic to select the best configurations by first ablating through different shapes, measuring performance, then creating a model that selects the best configuration.</p>
+
+      <h3 id="production-mma-n">MMA N size</h3>
+
+      <p>As mentioned before, <a href="https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-kind-shapes">B200 supports the following sizes</a>:</p>
+
+      <ul>
+        <li><code>MMA_M</code> = 128</li>
+        <li><code>MMA_N</code> = {8, 16, ..., 256} in steps of 8</li>
+        <li><code>MMA_K</code> = 64</li>
+      </ul>
+
+      <p>The choice of <code>MMA_N</code> is configurable. We select <code>MMA_N</code> to be the closest valid multiple of 8 until 256. This matches our empirical results and is motivated by reducing unnecessary compute.</p>
+
+      <h3 id="production-swap-ab">Swap AB</h3>
+
+      <p>Often, we encounter GEMMs where <code>M</code> represents the batch size, around the range of 1-128. This results in <em>skinny</em> GEMMs, where \(M \ll N,K\). Unlike the N case, we are not able to change the <code>MMA_M</code> size. Instead, we swap the operands, such that M and N swap, allowing us to configure the size of the tensor core for our smaller M. This is enabled because</p>
+
+      <p class="centered">\(C = AB, \quad C^T = B^TA^T\)</p>
+
+      <p>From here, we have the case where the N is now small and <code>MMA_N</code> can be chosen as we described above.</p>
+
+      <h3 id="production-scheduling">Static vs Dynamic Tile Scheduling</h3>
+
+      <p>We don't need CLC when there is 1 SM wave. When there are many waves (&gt;4 in testing), we find no difference between static and dynamic scheduling. However, when there are a few waves, the problem shape determines whether CLC improves or harms performance empirically. For the reference implementation, we went with the following rule found empirically:</p>
+
+      <pre><code>if (clusters &lt;= wave_width)       CLC off
+else if (clusters &gt;= 4*wave_width) CLC on
+else                                CLC on if (k &gt;= 16384) else off   // transitional band</code></pre>
+
+      <p>Investigating it further, there was a relationship in the transition band where it was dependent on M, N, and the number of waves. However, selecting CLC when static would've been better resulted in 1.2x to 2x slowdown, while the opposite was at most a 10% regression. This is something that could be investigated further, perhaps with some more rigorous microbenchmarking. For now, the selection motivated from empirical results is sufficient.</p>
+
+      <h3 id="production-cta">1-CTA vs 2-CTA</h3>
+
+      <p>We develop the number of CTAs used for GEMM through ablating through different shapes and selecting a heuristic that best fits. We ran an ablation on the following values</p>
+
+      <p class="centered">\(M \in \{1024, 2048, 4096, 8192, 16384\}\)</p>
+      <p class="centered">\(N \in \{1024, 2048, 4096, 8192, 16384\}\)</p>
+      <p class="centered">\(K \in \{1024, 2048, 4096, 8192, 16384\}\)</p>
+
+      <p>and got the following results</p>
+
+      <img class="figure figure-lg" src="cta_count_grids.png" alt="1-CTA vs 2-CTA ablation results" />
+
+      <p>The heuristic was chosen to reduce the overall performance loss from choosing the incorrect configuration.</p>
+
+      <h3 id="production-supergroup">Supergroup Size</h3>
+
+      <img class="figure figure-lg" src="supergroup_grids.png" alt="Supergroup size ablation results" />
+
+      <p>We run a similar ablation for choosing supergroup size, ablating through the following shapes:</p>
+
+      <p class="centered">\(M \in \{1024, 2048, 4096, 8192, 16384\}\)</p>
+      <p class="centered">\(N \in \{1024, 2048, 4096, 8192, 16384\}\)</p>
+      <p class="centered">\(K \in \{1024, 2048, 4096, 8192, 16384\}\)</p>
+
+      <p>and the following supergroup values:</p>
+
+      <p class="centered">\(sg \in \{1, 2, 4, 6, 8, 10, 12, 16, 20, 24, 32, 36, 40, 48, 56, 64\}\)</p>
+
+      <p>The choice of supergroup value wasn't one that generalized well. Selecting a value for supergroup that was close to the best value didn't necessarily mean we would get similar performance. Due to this, motivating a heuristic was difficult. The first strategy was to use a lookup table given this ablation. Given an \((M,N,K)\), we'd select the best supergroup value found during ablation. If an \((M,N,K)\) wasn't measured, we'd select the closest shape with a datapoint to it and use its supergroup value.</p>
+
+      <p>While we found good performance for those \((M,N,K)\) shapes we measured, it resulted in poor performance for the shapes that had to use its nearest neighbor's value. To reduce the reliance on the LUT, we can motivate some choices of supergroup with rules:</p>
+
+      <p class="centered"><strong>1. If A and B can fit entirely in L2, then supergroup choice does not matter.</strong></p>
+
+      <p>In this case, we select 1 as default.</p>
+
+      <p class="centered"><strong>2. We should select S such that it is as close to the aspect ratio of the output tile to maximize L2 reuse.</strong></p>
+
+      <p>Given,</p>
+
+      <p class="centered">\(N_A = \dfrac{N_{CTA}}{S}\)</p>
+      <p class="centered">\(N_B = S\)</p>
+      <p class="centered">\(W^{A}_{tile} = \tfrac{1}{2} B_M K + \tfrac{1}{16} B_M K\)</p>
+      <p class="centered">\(W^{B}_{tile} = \tfrac{1}{2} B_N K + \tfrac{1}{16} B_N K\)</p>
+
+      <p>where</p>
+
+      <table class="def-table">
+        <tbody>
+          <tr><td>\(N_{CTA}\)</td><td>number of CTA (or CTA clusters)</td></tr>
+          <tr><td>\(N_A\)</td><td>number of A tiles in supergroup \(S\)</td></tr>
+          <tr><td>\(N_B\)</td><td>number of B tiles in supergroup \(S\)</td></tr>
+          <tr><td>\(W^{A}_{tile}\)</td><td>size of A tile</td></tr>
+          <tr><td>\(W^{B}_{tile}\)</td><td>size of B tile</td></tr>
+        </tbody>
+      </table>
+
+      <p>The size of the tiles used in an SM wave given a supergroup <code>S</code> is</p>
+
+      <p class="centered">\(G = N_A W^{A}_{tile} + N_B W^{B}_{tile}\)</p>
+
+      <p>We select S such that it is as close to the aspect ratio \(W^{B}_{tile} / W^{A}_{tile}\). We get maximum L2 reuse when the number of bytes of A tile equals bytes of B tile. Since M doesn't necessarily equal N, we need</p>
+
+      <p class="centered">\(N_A \cdot W^{A}_{tile} = N_B \cdot W^{B}_{tile}\)</p>
+
+      <p>Therefore</p>
+
+      <p class="centered">\(N_A W^{A}_{tile} = N_B W^{B}_{tile}\)</p>
+      <p class="centered">\(\dfrac{N_{CTA}}{S} W^{A}_{tile} = S \cdot W^{B}_{tile}\)</p>
+      <p class="centered">\(S = \sqrt{\dfrac{N_{CTA}\, W^{A}_{tile}}{W^{B}_{tile}}}\)</p>
+
+      <p>If \(G\) can fit into L2, then we select \(S\).</p>
+      <p>If \(G\) cannot fit into L2, we reduce \(S\) and check if it can fit into L2.</p>
+      <p>If no \(S\) can fit, then we choose \(S=1\).</p>
+
+      <h3 id="production-results">Results</h3>
+
+      <p>If you plan to use the production kernel in the <code>reference</code> folder for a particular shape, it would be wise to run an ablation and save the best configuration to get the best performance from the kernel. Running <code>reference/benchmark.py</code>, we get the following results:</p>
+
+      <h4>Square</h4>
+
+      <table>
+        <thead><tr><th>Shape (M=N=K)</th><th class="num">Kernel</th><th class="num">cuBLAS</th><th class="num">Speedup</th></tr></thead>
+        <tbody>
+          <tr><td>128</td><td class="num">6.6 us</td><td class="num">15.0 us</td><td class="num">2.27x</td></tr>
+          <tr><td>256</td><td class="num">5.3 us</td><td class="num">14.3 us</td><td class="num">2.71x</td></tr>
+          <tr><td>512</td><td class="num">5.2 us</td><td class="num">12.3 us</td><td class="num">2.38x</td></tr>
+          <tr><td>1024</td><td class="num">9.1 us</td><td class="num">14.4 us</td><td class="num">1.59x</td></tr>
+          <tr><td>2048</td><td class="num">7.4 us</td><td class="num">24.2 us</td><td class="num">3.26x</td></tr>
+          <tr><td>4096</td><td class="num">30.2 us</td><td class="num">29.0 us</td><td class="num">0.96x</td></tr>
+          <tr><td>8192</td><td class="num">219.7 us</td><td class="num">214.7 us</td><td class="num">0.98x</td></tr>
+          <tr><td>16384</td><td class="num">1699.9 us</td><td class="num">1668.5 us</td><td class="num">0.98x</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Rectangle (small M)</h4>
+
+      <table>
+        <thead><tr><th>Shape (N=K=2048)</th><th class="num">Kernel</th><th class="num">cuBLAS</th><th class="num">Speedup</th></tr></thead>
+        <tbody>
+          <tr><td>M=1</td><td class="num">4.8 us</td><td class="num">11.2 us</td><td class="num">2.35x</td></tr>
+          <tr><td>M=2</td><td class="num">4.8 us</td><td class="num">11.9 us</td><td class="num">2.49x</td></tr>
+          <tr><td>M=4</td><td class="num">5.6 us</td><td class="num">11.1 us</td><td class="num">1.97x</td></tr>
+          <tr><td>M=8</td><td class="num">4.9 us</td><td class="num">17.3 us</td><td class="num">3.50x</td></tr>
+          <tr><td>M=16</td><td class="num">4.7 us</td><td class="num">14.1 us</td><td class="num">2.97x</td></tr>
+          <tr><td>M=32</td><td class="num">5.6 us</td><td class="num">11.3 us</td><td class="num">2.01x</td></tr>
+          <tr><td>M=64</td><td class="num">9.3 us</td><td class="num">15.4 us</td><td class="num">1.65x</td></tr>
+          <tr><td>M=128</td><td class="num">6.2 us</td><td class="num">15.8 us</td><td class="num">2.55x</td></tr>
+          <tr><td>M=256</td><td class="num">5.9 us</td><td class="num">22.1 us</td><td class="num">3.74x</td></tr>
+          <tr><td>M=512</td><td class="num">7.5 us</td><td class="num">13.7 us</td><td class="num">1.82x</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Rectangle (N=K)</h4>
+
+      <table>
+        <thead><tr><th>Shape (N=K=4096)</th><th class="num">Kernel</th><th class="num">cuBLAS</th><th class="num">Speedup</th></tr></thead>
+        <tbody>
+          <tr><td>M=1024</td><td class="num">10.1 us</td><td class="num">12.0 us</td><td class="num">1.18x</td></tr>
+          <tr><td>M=2048</td><td class="num">17.8 us</td><td class="num">14.8 us</td><td class="num">0.84x</td></tr>
+          <tr><td>M=4096</td><td class="num">30.2 us</td><td class="num">29.0 us</td><td class="num">0.96x</td></tr>
+          <tr><td>M=8192</td><td class="num">59.5 us</td><td class="num">60.8 us</td><td class="num">1.02x</td></tr>
+          <tr><td>M=14336</td><td class="num">102.7 us</td><td class="num">101.3 us</td><td class="num">0.99x</td></tr>
+          <tr><td>M=16384</td><td class="num">118.4 us</td><td class="num">115.3 us</td><td class="num">0.97x</td></tr>
+        </tbody>
+      </table>
+
+    </section>
+
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      var links = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+      var sections = links.map(function (a) {
+        return document.querySelector(a.getAttribute('href'));
+      });
+
+      function setActive() {
+        var pos = window.scrollY + 120;
+        var current = 0;
+        for (var i = 0; i < sections.length; i++) {
+          if (sections[i] && sections[i].offsetTop <= pos) current = i;
+        }
+        links.forEach(function (a) { a.classList.remove('active'); });
+        if (links[current]) links[current].classList.add('active');
+      }
+
+      document.addEventListener('scroll', setActive, { passive: true });
+      window.addEventListener('resize', setActive);
+      setActive();
+    })();
+
+    (function () {
+      var links = document.querySelectorAll('main a[href^="http"]');
+      links.forEach(function (a) {
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener');
+      });
+    })();
+  </script>
+</body>
+</html>
