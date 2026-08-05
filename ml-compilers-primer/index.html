@@ -326,7 +326,7 @@
   <script>
     const totalSlides = 76;
 
-    const overviewText = 'This presentation was given at a <a href="https://x.com/sgdescent/status/2027486260646789429" target="_blank" rel="noopener">ML systems reading group at CMU</a> over the summer. I have taken the slides and added notes underneath to share the presentation. This largely covers the papers that introduced TensorFlow, PyTorch 2, and TVM, along with the preceeding works that laid the foundation or inspired these projects. This presentation and its notes should provide a fundamental overview of the ML compiler landscape to get started.';
+    const overviewText = 'This presentation was given at a <a href="https://x.com/sgdescent/status/2027486260646789429" target="_blank" rel="noopener">ML systems reading group at CMU</a> over the summer. I have taken the slides and added notes underneath to share the presentation. This largely covers the papers that introduced TensorFlow, PyTorch 2, and TVM, along with the preceding works that laid the foundation or inspired these projects. This presentation and its notes should provide a fundamental overview of the ML compiler landscape to get started.';
 
     const toc = [
       {
@@ -479,7 +479,7 @@ Here, it is worth mentioning [equality saturation](https://www.cs.cornell.edu/~l
 
       12: `Operator fusion is often implemented in a rule-based fashion. TVM classifies a node into one of four classes then based on the parent and child nodes to these classes, fusion can occur based on the listed rules. Operator sinking is also common to reorder computation to enable more fusion.`,
 
-      13: `CSE, in simple terms, finds repeated operations and stores the result rather than recomputing it each time. Optimizations such as DCE, NOP eliminiation, and zero-dim tensor elimination tends to appear when an optimizer pass occurs resulting in some dead operation. Memory planning is also important as memory is often a bottleneck. Compilers may choose in-place when the input buffer has no other pending consumer, typical in gradient accumulation, element-wise updates, or in inference pipelines.`,
+      13: `CSE, in simple terms, finds repeated operations and stores the result rather than recomputing it each time. Optimizations such as DCE, NOP elimination, and zero-dim tensor elimination tends to appear when an optimizer pass occurs resulting in some dead operation. Memory planning is also important as memory is often a bottleneck. Compilers may choose in-place when the input buffer has no other pending consumer, typical in gradient accumulation, element-wise updates, or in inference pipelines.`,
 
       14: `While we could launch a kernel for each node from a kernel library, constructing a kernel library with all the possible combinations after optimizing the DAG is infeasible. We could restrict the graph optimizations to only allow kernels from our library, but this makes the library the bottleneck and can result in lower performance. Instead we could do some code generation and compile this to device code straight from the graph. We will find that an intermediate layer, a low-level IR, is useful to apply transformation to the code at a high level before having it compiled into device code. This IR can encode information about the actual implementation, where another set of design space can be searched and optimized, before code generation occurs.`,
 
@@ -495,9 +495,9 @@ Here, it is worth mentioning [equality saturation](https://www.cs.cornell.edu/~l
 
       22: `Theano was an early math compiler that optimized mathematical expressions with NumPy-like syntax. The user defines the variables and the computation graph. Theano then compiles and updates variables each iteration a function is called, simulating a backward pass.`,
 
-      23: `Theano follows a compilation pipeline. CSE, DCE, and arithmetic simplification and strength reduction are performed along with stabalization, simplifying expressions like \`log(1+exp(x))\` as \`x\` for large values of \`x\`. Specialization involves replacing operations with efficient implementations such as \`pow(x, 2)\` with \`sqr(x)\` and calling BLAS.
+      23: `Theano follows a compilation pipeline. CSE, DCE, and arithmetic simplification and strength reduction are performed along with stabilization, simplifying expressions like \`log(1+exp(x))\` as \`x\` for large values of \`x\`. Specialization involves replacing operations with efficient implementations such as \`pow(x, 2)\` with \`sqr(x)\` and calling BLAS.
 
-GPU computation follows the following heursitic from the paper:
+GPU computation follows the following heuristic from the paper:
 
 """
 if any input or output of an expression resides on the GPU and the expression has a GPU equivalent, then the GPU equivalent is substituted in.
@@ -523,13 +523,13 @@ The python operators are overloaded to keep track of these characteristics so a 
 
       33: `Autograd supports the gradient of many functions.`,
 
-      34: `Chainer noted that control flows and debugging were difficult in frameworks that required the user to contruct the graph. Chainer's design will look similar to AutoGrad's backward pass.`,
+      34: `Chainer noted that control flows and debugging were difficult in frameworks that required the user to construct the graph. Chainer's design will look similar to AutoGrad's backward pass.`,
 
       35: `Chainer tackled the issue by introducing the **Define-by-Run** paradigm.
 
 In the ***Define-and-Run*** paradigm, the computational graph of the model is first defined and constructed in the Define phase then the actual forward and backward calculation of the graph is performed in the Run phase. It works well for static models, but due to the graph compilation, it becomes difficult to support conditional flows within the graph. Frameworks like TensorFlow had to create special operators to create this behavior. In addition, it was difficult to debug and observe the internals of the model. A user wouldn't be able to use print statements to analyze a tensor for example.
 
-In the ***Define-by-Run*** paradigm, unlike Theano or Tensorflow which constructs the graph beforehand, Chainer constructs the graph during runtime similar to AutoGrad. Variable nodes represent the variables involved in the computation and function nodes represent the operations applied to the variables. The computational graph only defines how to backtack the operations applied to the input and does not define the forward computation. This allowed the use of Python control flows and made debugging easier.`,
+In the ***Define-by-Run*** paradigm, unlike Theano or Tensorflow which constructs the graph beforehand, Chainer constructs the graph during runtime similar to AutoGrad. Variable nodes represent the variables involved in the computation and function nodes represent the operations applied to the variables. The computational graph only defines how to backtrack the operations applied to the input and does not define the forward computation. This allowed the use of Python control flows and made debugging easier.`,
 
       36: `Often when creating a neural network, we reuse components. To enable this, Chainer uses classes to construct the blocks that make up the model. This should look familiar! PyTorch and Chainer's UX were [inspired and co-evolved with each other](https://soumith.ch/blog/2023-12-17-pytorch-design-origins.md.html#/theinspirationfromchainer%E2%86%92pytorchandtheinspirationforpytorch%E2%86%92chainerv2).`,
 
@@ -599,7 +599,7 @@ Motivated by the fact that compilers like GCC and LLVM struggle to optimize node
 
       49: `TorchInductor has a *Define-by-Run Loop-level IR*, which allows TorchInductor to use Python's features without needing boiler plate. Functions are defined for the fundamental operators, where the fallback kernel which would have ran in eager mode is used if the node is not supported. \`TensorBox\` correspond to \`torch.Tensor\` and \`StorageBox\` corresponds to \`torch.Storage\`. The \`ComputedBuffer\` represents the tensor that will be generated using a Python function. The function is described with \`Pointwise\`, \`Reduction\`, \`Scatter\`, or other operators. The function is defined with \`ops\`, which then points to something that writes Triton or C++ code. There's a number of ops such as \`ops.load\`, \`ops.store\`, \`ops.add\`, \`ops.mul\`, \`ops.reduction\`, etc.`,
 
-      50: `To handle operator fusion, each buffer gets converted into some \`BaseSchedulerNode\`, which comprises of many childern classes. Two \`SchedulerNode\`s are capable of being merged into a \`FusedSchedulerNode\`. A \`Scheduler.can_fuse(node1, node2)\` returns \`True\` if two nodes can be fused together. This checks dependency edges, and also checks many other properties to ensure correctness of a fusion. Then \`Scheduler.score_fusion(node1, node2)\` is used to order different fusion possibilities. Some fusions are mutually exclusive, so TorchInductor chooses the one with the higher score. The fusion score orders fusions by:
+      50: `To handle operator fusion, each buffer gets converted into some \`BaseSchedulerNode\`, which comprises of many children classes. Two \`SchedulerNode\`s are capable of being merged into a \`FusedSchedulerNode\`. A \`Scheduler.can_fuse(node1, node2)\` returns \`True\` if two nodes can be fused together. This checks dependency edges, and also checks many other properties to ensure correctness of a fusion. Then \`Scheduler.score_fusion(node1, node2)\` is used to order different fusion possibilities. Some fusions are mutually exclusive, so TorchInductor chooses the one with the higher score. The fusion score orders fusions by:
 
     Category of fusion (e.g. pointwise/reduction/template)
     Estimated bytes of memory traffic saved by the fusion
@@ -638,9 +638,9 @@ Intuitively, this means the storage granularity my be equal or coarser than the 
 
       62: `The Halide compiler can also choose the best schedule for the device using an autotuner.`,
 
-      63: `Graph-level optimizations must avoid operators not available in a predefined library or use unoptimized implementations. Many apporaches to lowering the graph leads to a large search space for optimizations as more devices get released. Each device has their own memory heirarchy and benefit from different tiling strategies and pipelines.`,
+      63: `Graph-level optimizations must avoid operators not available in a predefined library or use unoptimized implementations. Many approaches to lowering the graph leads to a large search space for optimizations as more devices get released. Each device has their own memory hierarchy and benefit from different tiling strategies and pipelines.`,
 
-      64: `TVM extends Halide's compute and schedule separation with a separation of target hardware intrisics from the transformation primitives. This scheduling space is then searched with an *automated program optimization framework* which uses an ML-based cost model. In addition, many of the graph-level optimizations can be applied to create new operators that are not supported by the libraries as the lowering to TIR with the optimized schedule performs competitively compared to custom implemented kernels.`,
+      64: `TVM extends Halide's compute and schedule separation with a separation of target hardware intrinsics from the transformation primitives. This scheduling space is then searched with an *automated program optimization framework* which uses an ML-based cost model. In addition, many of the graph-level optimizations can be applied to create new operators that are not supported by the libraries as the lowering to TIR with the optimized schedule performs competitively compared to custom implemented kernels.`,
 
       65: `Example of TVM's API.`,
 
@@ -650,9 +650,9 @@ Intuitively, this means the storage granularity my be equal or coarser than the 
 
       68: `When modeling parallelism, most models follow a *nested parallelism* model, similar to fork-join, where each compute unit does not share data with its sibling. However, many GPU architectures introduce *shared memory*, where threads can cooperatively work to move data into a shared memory space before accessing their required data. *Memory scopes* were introduced such that the cooperative memory access can be included in the compiler by adding additional information about the dependencies of each thread. This allows the compiler to create these pipelines found in many GPU programs.`,
 
-      69: `Since each device has their own variations on tensor instructions, there's a challenge to support each version within the compiler, so *tensorization* was introduced to replace a unit of computation defined by the user or the compiler with supported corresponding intrinsic. The compiler pattern matches the computation pattern with the schedule and replaces it with the defined lowering function. This makes supporting new devices easier and allows the compiler engineer to create micro-kernels that can extend TVM for futher optimizations.`,
+      69: `Since each device has their own variations on tensor instructions, there's a challenge to support each version within the compiler, so *tensorization* was introduced to replace a unit of computation defined by the user or the compiler with supported corresponding intrinsic. The compiler pattern matches the computation pattern with the schedule and replaces it with the defined lowering function. This makes supporting new devices easier and allows the compiler engineer to create micro-kernels that can extend TVM for further optimizations.`,
 
-      70: `TVM's schedule space is a large search space. Their schedule optimizers has two components: a schedule explorer which proposes a new schedule and a ML model that predicts the schedule's cost. The optimizer chooses the top-k schedules given the cost model's estimate from a batch of schedule candidates. These candidates are chosen with an annealing alogrithm, where a random configuration is chosen and walks until the configuration's estimated cost is lower than the start's cost. Once the top-k schedules have been selected, each configuration is ran and benchmarked. These results are saved and are used periodically to improve the ML cost model's performance.`,
+      70: `TVM's schedule space is a large search space. Their schedule optimizers has two components: a schedule explorer which proposes a new schedule and a ML model that predicts the schedule's cost. The optimizer chooses the top-k schedules given the cost model's estimate from a batch of schedule candidates. These candidates are chosen with an annealing algorithm, where a random configuration is chosen and walks until the configuration's estimated cost is lower than the start's cost. Once the top-k schedules have been selected, each configuration is ran and benchmarked. These results are saved and are used periodically to improve the ML cost model's performance.`,
 
       72: `Some additional papers to read:
 
