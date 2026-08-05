@@ -1,0 +1,317 @@
+# Overview
+
+This presentation was given in a ML System reading group at CMU. 
+
+
+# Slide 3
+
+When we refer to ML compilers, we refer to a stack of software components that take a user defined model and outputs efficient code to run on a device. UX design, supporting different devices, compiling for inference vs training all become important when designing an ML compiler.
+
+# Slide 4
+
+I'll motivate ML compilers using the framework from the [The Deep Learning Compiler: A Comprehensive 
+Survey](https://arxiv.org/pdf/2002.03794) paper. Generally, ML compilers follow a pattern: the user provides a model 
+definition that creates a graph. This graph sits in the frontend and is generally hardware independent. Graph optimizations 
+are applied to this graph until it is fully optimized. Then this graph is *lowered* into a *low-level intermediate representation (IR)*. This is generally designed and optimized with a targeted device. This is finally compiled into machine code. 
+
+
+# Slide 5
+
+The high-level graphs can represented as directed acyclic graphs (DAG). The user defines this DAG. From this, we can then launch kernels for a library for each node, using the edge dependencies as the inputs.
+
+# Slide 6
+
+It can also be represented with a [let-binding representation](https://en.wikipedia.org/wiki/Let_expression) but this is not as common.
+
+# Slide 7
+
+# Slide 8 
+
+Each node in the high-level IR represents an operation. This can be defined at different levels of granularity, whether representing an entire neural network or specific algebraic expressions.
+
+# Slide 9
+
+Once the DAG is constructed, we can optimize the graph. Generally, we optimize the graph in passes, walking through the graph, applying optimizations in iterations until it reaches a stable point and the graph has no remaining optimizations. We can apply optimizations on a particular node, over a subset of nodes, or some overall characteristic of the entire graph. 
+
+Here, it is worth mentioning [equality saturation](https://www.cs.cornell.edu/~lerner/papers/lmcs11-eqsat.pdf). Optimizing the graph in passes creates a dependency on the optimization ordering. Equality saturation removes this dependency and enables the use of a global heuristic to optimize the graph. `egg` is a [popular library](https://github.com/egraphs-good/egg) that implements this in Rust.
+
+# Slide 12
+
+Operator fusion is often implemented in a rule-based fashion. TVM classifies a node into one of four classes then based on the parent and child nodes to these classes, fusion can occur based on the listed rules. Operator sinking is also common to reorder computation to enable more fusion.
+
+# Slide 13
+
+CSE, in simple terms, finds repeated operations and stores the result rather than recomputing it each time. Optimizations such as DCE, NOP eliminiation, and zero-dim tensor elimination tends to appear when an optimizer pass occurs resulting in some dead operation. Memory planning is also important as memory is often a bottleneck. Compilers may choose in-place when the input buffer has no other pending consumer, typical in gradient accumulation, element-wise updates, or in inference pipelines.
+
+# Slide 14
+
+While we could launch a kernel for each node from a kernel library, constructing a kernel library with all the possible combinations after optimizing the DAG is infeasible. We could restrict the graph optimizations to only allow kernels from our library, but this makes the library the bottleneck and can result in lower performance. Instead we could do some code generation and compile this to device code straight from the graph. We will find that an intermediate layer, a low-level IR, is useful to apply transformation to the code at a high level before having it compiled into device code. This IR can encode information about the actual implementation, where another set of design space can be searched and optimized, before code generation occurs. 
+
+# Slide 15
+
+Some examples of real low-level IRs used in modern ML compilers
+
+# Slide 17
+
+The design space of optimization for the low-level IR focuses on loop structure, tiling, memory, pipelining, and scheduling. These are often hardware dependent, so device needs to be specified by the user.
+
+# Slide 18
+
+This is a large design space, so different strategies are used to search and evaluate the best configurations.
+
+# Slide 19
+
+Once the low-level IR is optimized, it is converted into code, whether Triton, CUDA, TIR, or MLIR. The code can then get compiled into the device binary. 
+
+# Slide 21
+
+[Theano: A CPU and GPU Math Compiler in Python]()
+[TensorFlow: A system for large-scale machine learning]()
+
+# Slide 22 
+
+Theano was an early math compiler that optimized mathematical expressions with NumPy-like syntax. The user defines the variables and the computation graph. Theano then compiles and updates variables each iteration a function is called, simulating a backward pass.
+
+# Slide 23
+
+Theano follows a compilation pipeline. CSE, DCE, and arithmetic simplification and strength reduction are performed along with stabalization, simplifying expressions like `log(1+exp(x))` as `x` for large values of `x`. Specialization involves replacing operations with efficient implementations such as `pow(x, 2)` with `sqr(x)` and calling BLAS. 
+
+GPU computation follows the following heursitic from the paper:
+
+"""
+if any input or output of an expression resides on the GPU and the expression has a GPU equivalent, then the GPU equivalent is substituted in.
+"""
+
+Code generation then runs the python modules for the computation graph.
+
+# Slide 29
+
+Autograd was motivated by the lack of software libraries that automated reverse-mode differentiation. 
+
+# Slide 30
+
+There are multiple approaches to create the computational graph F. The first is to have the user construct this, similar to Theano. Another way is to construct a source code inspector, which would amount to building a custom Python interpreter. Their approach, which will influence later ML compilers, monitors the function as it executes and construct the computational graph while it is being created. 
+
+# Slide 31
+
+quote formatting (https://dougalmaclaurin.com/phd-thesis.pdf Section 4.2 of Dougal Maclaurin's PhD Thesis *Modeling, Inference and Optimization with Composable Differentiable Procedures*):
+The main idea is to replace every primitive function with a wrapped version. The wrapping layer takes care of the necessary book-keeping, recording the name of the function, the arguments, and the return value. To the user, the wrapped function looks and behaves just like the original. 
+
+The python operators are overloaded to keep track of these characteristics so a graph can be constructed during runtime. 
+
+# Slide 32
+
+Suppose we want to calculate the gradient of a variable with respect to another variable. During construction, we create a tape that keeps track of the list of operations. When a new node is created, it is appended to the tape so the tape is sorted topologically. A tape is created for each variable we want the gradient with respect to. Each Node inherits its parent's tape. Then given the independent and dependent variable, we can go to the independent variable's tape, check if the dependent variable is present and trace backwards.
+
+# Slide 33
+
+Autograd supports the gradient of many functions.
+
+# Slide 34
+
+Chainer noted that control flows and debugging were difficult in frameworks that required the user to contruct the graph. Chainer's design will look similar to AutoGrad's backward pass.
+
+# Slide 35
+
+Chainer tackled the issue by introducing the Define-by-Run paradigm. 
+
+In the Define-and-Run paradigm, the computational graph of the model is first defined and constructed in the Define phase then the actual forward and backward calculation of the graph is performed in the Run phase. It works well for static models, but due to the graph compilation, it becomes difficult to support conditional flows within the graph. Frameworks like TensorFlow had to create special operators to create this behavior. In addition, it was difficult to debug and observe the internals of the model. A user wouldn't be able to use print statements to analyze a tensor for example.
+
+Unlike Theano or Tensorflow which constructs the graph beforehand, Chainer constructs the graph during runtime similar to AutoGrad. Variable nodes represent the variables involved in the computation and function nodes represent the operations applied to the variables. The computational graph only defines how to backtack the operations applied to the input and does not define the forward computation. This allowed the use of Python control flows and made debugging easier. 
+
+# Slide 36
+
+Often when creating a neural network, we reuse components. To enable this, Chainer uses classes to construct the blocks that make up the model. This should look familiar! PyTorch and Chainer's UX were [inspired and co-evolved with each other](https://soumith.ch/blog/2023-12-17-pytorch-design-origins.md.html#/theinspirationfromchainer%E2%86%92pytorchandtheinspirationforpytorch%E2%86%92chainerv2).
+
+# Slide 37
+
+Memory efficiency remained an important problem for handling backpropagation. Normally, in the Define-and-Run paradigm, the computational graph is available before execution, allowing the compiler to apply many of the graph transformation discussed earlier to reduce memory consumption. In a Define-by-Run framework, Chainer implemented the following optimizations:
+
+### Global Memory Usage Reduction
+
+Chainer deallocates the memory for parts of the computational graph that is no longer referenced in the code. This elimination occurs after processing it during the backpropagation, minimizing the peak memory consumption.
+
+### Function-wise Local Memory Usage Reduction
+
+Chainer also only saves the inputs and outputs that are needed by the backward formula. 
+
+###  Double Backpropagation
+
+Chainer supports higher order gradients through supporting backpropagation. From the paper:
+
+quote formatting (https://arxiv.org/pdf/1908.00213 Section 4.2 of *Chainer: A Deep Learning Framework for Accelerating the
+Research Cycle*):
+Double backpropagation is supported by implementing the backward computation of each operation using functions supporting
+differentiation.
+
+This can result in reference cycles as the gradient's computational graph may reference the original variable. For example,
+
+given y = x^3, the backward pass is \del y / \del x = 3x^2. 
+
+For a normal backward pass, storing 3x^2 is sufficient. x.grad is stored as the result of `3x^2`. 
+
+In the case where double backpropagation is needed, the graph of 3x^2 is stored into x.grad. The graph looks like the following:
+
+```
+x -> square -> x² -> * 3 -> \del y / \del x
+```
+
+which contains a reference to x. Now if we store this graph into x.grad rather than the over expression result, this results in a circular reference. x points to the gradient graph through .grad and gradient graph points through x in one of its nodes.   
+
+To solve this, Chainer decouples the graph from the variable to remove the reference cycles in the first case by introducing `Variable(x)` and `VariableNode(x)`, which separates the references made from the user code and inter-node  references. 
+
+A similar reference cycle occurs when with gradients that require the output. Consider 
+
+y=tanh(x).
+
+The backward pass is: ∂y/∂x = 1−y^2, creating a reference cycle with y.
+
+In this case, Chainer stores another reference to the y array and uses it during the graph, similarly decoupling the two nodes and breaking the cycle.
+
+# Slide 38
+
+To use GPUs, CuPy was developed for the backend of Chainer.
+
+# Slide 39
+
+PyTorch implements many of the same ideas from Chainer but aimed to solve the performance issue. 
+
+# Slide 40
+
+PyTorch's core is implemented in C++ rather then Python like in Chainer. In PyTorch's eager mode, CUDA kernels are called asynchronously and queued using CUDA streams. This allows for additional host side computation while waiting for the kernel's computation to complete. 
+
+# Slide 41
+
+Back when the PyTorch 2019 paper was released, there was no support for `cudaMallocAsync`. PyTorch created their own allocator to get around this by allocating a large chunk of memory then reassigning the memory pool in chunks internally.
+
+# Slide 42
+
+As PyTorch was run in eager mode and a graph was only known after execution in runtime, PyTorch introduced [TorchScript](url) to convert the PyTorch model into a graph during *compilation*. This is out of the scope of the presentation. This graph was then given to a backend that the user chose, one of them being Glow.
+
+Motivated by the fact that compilers like GCC and LLVM struggle to optimize nodes in a dataflow graph, they introduce an additional lowering phase for the graph optimization. The motivating problem in the paper is given in figure 1. Two for-loops write into some memory region, and later the return statement reads from some element in the array. Neither GCC nor LLVM were able to remove the first loop, which is redundant, or replace the load operation with the constant value '4'. The reason is that analyzing loops and memory is difficult. The compiler needs to prove that the indices in the loops do not overflow, and that pointers in the program do not alias, and that the result of the computation is accurate and conform with the specification of the C programming language. 
+
+# Slide 43
+
+Glow essentially goes through two graph phases. The first is a standard dataflow graph, where the nodes are defined at the model level (`Convolution`, `MaxPool`, `FFN`). Graph level optimizations are applied at this layer. To allow the compiler's backend to apply predication and generated fused kernel effectively, Glow lowers into a lower-level DAG, where the nodes are linear algebra operators. For example, a fully connected layer is decomposed into a matrix multiplication and broadcast add. This allows for additional graph level optimizations at a finer level where target-specific optimizations can then be implemented at the low-level IR.
+
+# Slide 44
+
+In a phase called "IRGen", the optimized graph is lowered into a low-level IR. This IR has two memory regions, the "declare" region, which stores variables in global scope, and "program" region, which allocates the variable within the kernel.  Within the program region, we also see instructions with operands. In particular, the "inout" operands can be used to modify a tensor in-place. Here, many low-level IR optimizations can take place, such as copy elimination and buffer sharing. 
+
+# Slide 45
+
+To support new instructions to Glow, they introduced `ClassGen`, which automatically generates the nodes for the high-level IR and instructions for the low-level IR. 
+
+# Slide 46
+
+If we call an existing library given the optimized low-level IR, Glow would unable to provide additional context such as tensor sizes, memory addresses, and pointer aliases, to apply optimizations to the source code. Glow shipped a library that can use this information to generate optimized LLVM bitcode. In addition, Glow also implements operator stacking with some data structure, where element-wise operations are stacked into one loop rather than iterating through the buffer in a naive implementation.
+
+# Slide 47
+
+PyTorch 2 introduced the `torch.compile` feature through [TorchDynamo](https://docs.pytorch.org/docs/2.13/user_guide/torch_compiler/torch.compiler_dynamo_overview.html) and [TorchInductor](https://jino-rohit.github.io/blogs/15_inductor.html). TorchDynamo is a JIT compiler that generates the computational graph through PyTorch's Define-by-Run interface. However, for this presentation, we'll be focusing on TorchInductor, the default backed which translates the graph into [Triton](https://triton-lang.org/main/index.html).
+
+# Slide 48
+
+Rather than implementing lowerings for all operators in PyTorch to TorchInductor’s IR, many operators in PyTorch are decomposed into a simpler set of operators that are easier to handle, similar to Glow's graph lowering. Decompositions are written as a Python implementation of a PyTorch operator in terms of other operators and is applied recursively until a fixed point is reached. 
+
+# Slide 49
+
+TorchInductor has a *Define-by-Run Loop-level IR*, which allows TorchInductor to use Python's features without needing boiler plate. Functions are defined for the fundamental operators, where the fallback kernel which would have ran in eager mode is used if the node is not supported. `TensorBox` correspond to `torch.Tensor` and `StorageBox` corresponds to `torch.Storage`. The `ComputedBuffer` represents the tensor that will be generated using a Python function. The function is described with `Pointwise`, `Reduction`, `Scatter`, or other operators. The function is defined with `ops`, which then points to something that writes Triton or C++ code. There's a number of ops such as `ops.load`, `ops.store`, `ops.add`, `ops.mul`, `ops.reduction`, etc.
+
+# Slide 50+51
+
+To handle operator fusion, each buffer gets converted into some `BaseSchedulerNode`, which comprises of many childern classes. Two `SchedulerNode`s are capable of being merged into a `FusedSchedulerNode`. A `Scheduler.can_fuse(node1, node2)` returns `True` if two nodes can be fused together. This checks dependency edges, and also checks many other properties to ensure correctness of a fusion. Then `Scheduler.score_fusion(node1, node2)` is used to order different fusion possibilities. Some fusions are mutually exclusive, so TorchInductor chooses the one with the higher score. The fusion score orders fusions by: 
+    1) the category of the fusion (e.g. pointwise/reduction/template)
+    2) estimated bytes of memory traffic saved by the fusion 
+    3) shorter distance between nodes in the original graph 
+
+# Slide 52
+
+Codegen is also responsible for common subexpression elimination (CSE). The pointwise decorator encodes boilerplate code used to facilitate block size heuristics, auto-tuning, and ahead-of-time kernel compilation. For more complex operations (matmuls and convolutions), TorchInductor has its own template system for generating Triton code that mixes handwritten Triton with generated Triton. A wrapper codegen is responsible for generating code that calls the kernels. It also supports C++ with OpenMP for CPU backend.
+
+# Slide 55
+
+The design space for the code is large, but largely follows a pattern. The optimal loop structure, which describes how the memory is accessed and is dependent on characteristics like range, stride, and order, changes with each device. 
+
+# Slide 56
+
+The Halide DSL decouples the algorithm from the loop structure!
+
+# Slide 59
+
+The call schedule is motivated by the following:
+
+    The granularity to *compute* the inputs
+    The granularity to *store* the result
+    Within the grains, the *order* the domain is traversed
+
+For domain order, the space of choices looks like:
+
+    Traverse sequentially vs parallel
+    Unroll vs vectorized
+    Column-major vs row-major
+    Split and reorder loops
+
+For the granularities at which we compute and store, the call schedule can be described along three axes:
+
+    breadth-first - computes and stores all values of a stage before moving to the next stage, computes and stores at the coarsest granularity.
+    fused - computes and stores the values needed for each stage as needed, computes and stores at the finest granularity.
+    sliding window - stores at the root granularity, computes at the finest granularity
+
+Intuitively, this means the storage granularity my be equal or coarser than the computation granularity. 
+
+# Slide 61
+
+The user can easily define the algorithm and the schedule separately.
+
+# Slide 62
+
+The Halide compiler can also choose the best schedule for the device using an autotuner. 
+
+# Slide 63
+
+Graph-level optimizations must avoid operators not available in a predefined library or use unoptimized implementations. Many apporaches to lowering the graph leads to a large search space for optimizations as more devices get released. Each device has their own memory heirarchy and benefit from different tiling strategies and pipelines.  
+
+# Slide 64
+
+TVM extends Halide's compute and schedule separation with a separation of target hardware intrisics from the transformation primitives. This scheduling space is then searched with an *automated program optimization framework* which uses an ML-based cost model. In addition, many of the graph-level optimizations can be applied to create new operators that are not supported by the libraries as the lowering to TIR with the optimized schedule performs competitively compared to custom implemented kernels.
+
+# Slide 65
+
+Example of TVM's API.
+
+# Slide 66
+
+The lowering enables TVM to do graph-level optimizations not possible in a kernel library system.
+
+# Slide 67
+
+We can see how TVM's Tensor Expression Language is similar to Halide! 
+
+# Slide 68
+
+When modeling parallelism, most models follow a *nested parallelism* model, similar to fork-join, where each compute unit does not share data with its sibling. However, many GPU architectures introduce *shared memory*, where threads can cooperatively work to move data into a shared memory space before accessing their required data. *Memory scopes* were introduced such that the cooperative memory access can be included in the compiler by adding additional information about the dependencies of each thread. This allows the compiler to create these pipelines found in many GPU programs.
+
+# Slide 69
+
+Since each device has their own variations on tensor instructions, there's a challenge to support each version within the compiler, so *tensorization* was introduced to replace a unit of computation defined by the user or the compiler with supported corresponding intrinsic. The compiler pattern matches the computation pattern with the schedule and replaces it with the defined lowering function. This makes supporting new devices easier and allows the compiler engineer to create micro-kernels that can extend TVM for futher optimizations. 
+
+# Slide 70
+
+TVM's schedule space is a large search space. Their schedule optimizers has two components: a schedule explorer which proposes a new schedule and a ML model that predicts the schedule's cost. The optimizer chooses the top-k schedules given the cost model's estimate from a batch of schedule candidates. These candidates are chosen with an annealing alogrithm, where a random configuration is chosen and walks until the configuration's estimated cost is lower than the start's cost. Once the top-k schedules have been selected, each configuration is ran and benchmarked. These results are saved and are used periodically to improve the ML cost model's performance.
+
+# Slide 72
+
+Some additional papers to read:
+
+# Slide 74
+
+Many current efforts focus on megakernels. ThunderKittens has a great blogs explaining [megakernels](https://hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles)
+
+# Slide 75
+
+[Mirage](https://github.com/mirage-project/mirage) contains a compiler that represents the kernel in hierarchical graphs and contains a [superoptimizer that generates megakernels](https://www.usenix.org/system/files/osdi25-wu-mengdi.pdf). It also features a [runtime](https://arxiv.org/pdf/2512.22219) that launches tasks on a persistent kernel, scheduling each task based on finergrained dependencies.
+
+# Slide 76
+
+There's also efforts for [compilation for edge devices](https://arxiv.org/pdf/2605.08195). [ExecuTorch](https://executorch.ai/) powers on-device AI for Instagram, WhatsApp, and the Meta Glasses!
