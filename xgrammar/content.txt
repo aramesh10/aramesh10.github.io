@@ -1,0 +1,308 @@
+XGrammar 
+
+# Slide 2
+
+Many use cases requires an LLM to generate content with a certain structure, whether it's an array, JSON, or a programming language. There exists a syntax the LLM must follow. However since LLMs model a probability distribution over its vocabulary, [START LATEX]p(y_i | x, y_{<i})[END LATEX], we can not naively ask the model to generate a valid program or structure with complete precision each time. The LLM may add keys to our JSON or generate invalid syntax. 
+
+Due to these mistakes, we may require the LLM to regenerate until correctness. We'll consider other methods before motivating the idea most methods of structured decoding use: masking the vocabulary to constrain the model's set of possible next tokens.
+
+[START LATEX]
+\begin{aligned}
+\text{Unconstrained:}\quad & \tilde{\mathbf z} = \mathbf z \\[1mm]
+\text{Constrained:}\quad & \tilde{\mathbf z} = \mathbf z + \mathbf m
+\end{aligned}
+
+\\ \\
+
+m_i =
+\begin{cases}
+0, & i \in \mathcal V_{\mathrm{valid}} \\
+-\infty, & i \notin \mathcal V_{\mathrm{valid}}
+\end{cases}
+
+\\ \\
+
+\text{where }\ \\
+\mathbf z = \text{model logits},\qquad \\
+\mathbf m = \text{constraint mask}.
+[END LATEX]
+
+We apply the mask to our model's vocabulary. We will find that generating the mask is a bottleneck. We have to apply it each time we sample a token. Much of the techniques we discuss focuses on efficiently generating this mask. 
+
+# Slide 3
+
+While naively prompting the LLM may not achieve 100% precision, we can improve this performance by doing some prompt engineering, whether by providing examples of our desired structure, breaking down our prompts into multiple turns, or even finetuning the model itself. 
+
+These methods don't work well for larger structures and may have inconsistent results. Going forward, we will look at ***constrained decoding***.
+
+# Slide 4
+
+Suppose we want the model to generate a floating point number. We can define the representation of a floating point number with ***regular expressions (regex)***:
+
+([0-9]*)?\.?[0-9]*
+
+From [Kleene's Theorem](https://en.wikipedia.org/wiki/Kleene%27s_algorithm), we know regex and ***finite state machines (FSM)*** are equivalent. Given the structure's regex, we can form a FSM, where its states define the mask to be applied to the next token prediction and the edges define the mask and the next state transition.
+
+In the given example from [Outlines](https://github.com/dottxt-ai/outlines), our model's vocabulary consists of the following:
+
+['A', '.', '42', '.2', '1']
+
+When constraining our model with the floating point regex, we know the first token must consist of a digit or a decimal point, as indicated by the valid transitions from state 0. This forms the state 0's mask:
+
+vocab: ['A', '.', '42', '.2', '1']
+ mask: [  0,   1,    1,    1,   1]
+ 
+When sampling, we sample from the valid tokens. The LLM generates its logits normally, we apply the mask, where invalid tokens's logits are set to -inf, then sample from the updated logits. Based on the sampled token, we then transition in our FSM. 
+
+# Slide 5
+
+Applying the mask involves setting the logits of the invalid tokens to -inf. By doing so, we essentially set the probability of sampling to 0. 
+
+Applying the mask is done efficiently and is not considered a bottleneck. XGrammar has [created kernels](https://github.com/mlc-ai/xgrammar/blob/main/python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.cu) to apply a token bitmask, described later, to a set of logits. It parallelizes setting the logits to -inf based on the mask and applies optimizations such as [packing the logits efficiently when many tokens are masked in a row](https://github.com/mlc-ai/xgrammar/blob/main/python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.cu#L84-L113) and [adapting the work per thread based on batch and vocabulary size](https://github.com/mlc-ai/xgrammar/blob/main/python/xgrammar/kernels/apply_token_bitmask_inplace_cuda.cu#L120-L159).  
+
+The bottleneck is in the construction of the mask. In [XGrammar](https://proceedings.mlsys.org/paper_files/paper/2025/file/5c20ca4b0b20b0bd2f1d839dc605e70f-Paper-Conference.pdf) unoptimized baseline implementation, the structured generation resulted in a per-token latency of 65.8 ms. After applying optimizations we will cover, it reduced down to 0.018 ms. 
+
+# Slide 6
+
+Outlines by dottxt.ai was an early implementation of constrained decoding given a defined regex. It converts the regex into an FSM. The state is tracked during sampling and the mask is applied to the logits. The important optimization here is that the mask is constructed before and is stored and read when needed. Constructing the mask during runtime results in high overhead and redundant computation. The FSM is static, it does not change. Therefore, the mask does not change and can be precomputed.
+
+# Slide 7
+
+Guidance from Microsoft implements one form of optimization to constrained decoding. Often, particularly in JSONs, portion of our structure is deterministic. We can skip the entire LLM sampling portion and append the deterministic portion of our desired result. Then the LLM can generate the non-deterministic portion, including under constraints. This results in a back and forth between a prefill phase and a decode phase, giving name to the ***interleave optimization***. 
+
+# Slide 8
+
+We can push this further by auto-completing the portions of the output when the FSM is deterministic. This follows similarly to the previous optimizations, but also includes cases when a value has to be an element of a set of valid values. In the example, `house` may only be one of four values: `Gryffindor`, `Slytherin`, `Ravenclaw`, and `Hufflepuff`. When the model outputs `G`, we know that the value must be `Gryffindor` and can complete the value. This is reflected in the FSM as the states and its transitions become deterministic. The important part here is that the LLM is only needed during the non-deterministic portion of the FSM.
+
+# Slide 9
+
+- Regular expressions form finite state machines. 
+- SQL and JSON have recursive structures. 
+- Finite state machines can not model recursive structures.
+
+Therefore regex is not enough to model SQL and JSON. 
+
+Noam Chomsky's paper on the [Three Models for the Description of Language](https://chomsky.info/wp-content/uploads/195609-.pdf) is an important paper for computational linguistics. Chomsky is interested in how a language's grammar, such as English, can be modeled. In a more modern interpretation, it introduces three ideas:
+
+1) Finite-state Markov processes can not model recursion and n-order statistical approximations do not converge to model recursion.
+2) An earlier form of content-free grammar called ***"phrase structure"*** which can model recursion, but can not describe relations between specific elements easily.
+3) Transformational grammar, which takes a sentence and applies a transformation to it to create a sentence with (mostly) equivalent meaning but different grammar, now applying rules to the sentence itself rather than the individual elements like in phrase structures. In a sense, it transforms a syntax tree into a different structure with equivalent meaning. 
+
+We'll discuss the paper in more detail, but the important lesson four our case is (1) and (2). Recursive structures can not be modeled by FSMs. We must use a rule based system, discussed in the next few slides, to incorporate recursion. If we wish to generate an unconstrained JSON, one which doesn't have a hard defined structure as we might define in a `Pydantic` object, we must be able to model recursion. The value of a particular key in a JSON may be another JSON object, and in it, one of its value might be a JSON, and so on. 
+
+### Three Models for the Description of Language
+
+The following is an overview on the paper. It's a foundational paper in formal language theory and computational linguistics, and is worth covering, not only for structured generation, but also programming languages, compilers, and NLP. Much of this detail is not necessarily relevant to XGrammar and structured decoding, but after reading, I found it is an important paper to have a high level understanding of. Chomsky is concerned with the problem of how to model language grammar and by doing so, create a general theory of linguistic structure. In his paper, he motivates these models with English. It's important to note that we are trying to understand *grammar*, not whether the underlying sentence makes sense. The paper gives an example:
+
+(14) colorless green ideas sleep furiously
+(15) furiously sleep ideas green colorless
+
+Even though the sentences makes little sense, sentence (14) has the grammatical correctness that we wish to model.
+
+#### Finite State Markov Processes
+
+Chomsky defines a finite state machine. Given a finite-state grammar [START LATEX]G[END LATEX] with finite number of states S_0, ... , S_q, a set of transition symbols A={a_{ijk} | 0 <= i,j <= q; l <= k <= N_{ij} \for each i,j}, and a set of pairs of states that are connected C={(S_i, S_j)}, the system produces a symbol a_{ijk} \in A as it moves from state S_i to S_j. Then a language L is a finite-state language if L is the set of sentences generated by the finite-state grammar G. We can generate a sentence by walking down the states and concatenating the transition symbols. 
+	
+We can generate the English language by setting A as the set of all English words and S is defined that it can model any sentences in the English language. The paper gives the following counter example:
+
+Suppose S_1, S_2, ... are declarative sentences, then the following are all English sentences:
+
+  (i) If S_1, then S_2.
+ (ii) Either S_3, or S_4.
+(iii) The man who said that S_5 is arriving today.
+
+We can place any declarative sentence in S_1, S_2, ... . However, we can also replace S_1 with (ii), creating 
+
+If either S_3 or S_4, then S_2. 
+
+Furthermore, we can replace S_3 or S_4 or S_2 with (i), (ii), or (iii). Essentially we are showing that English has recursion. This can go one forever, meaning that S is can not be finite and English can not be modeled by a finite state markov process.
+
+#### Phrase Structure
+
+We can model recursion with a phrase-structure grammar. Given a finite vocabulary V_P, finite set of initial strings \Sigma, and finite set F : X -> Y, where X,Y in V_P, we can interpret each rule as rewriting X as Y. So for a [\Sigma, F] grammar, we require
+
+\Sigma : \Sigma_1, ... \Sigma_n
+F: X_1 -> Y_1
+       ...
+   X_m -> Y_m
+   
+We will look at an example closely in the next slide. 
+
+However, these do not handle ambiguities well or grammar that are mostly equivalent but require the changing of tense or morpheme to remain grammatically correct. For example, consider the grammar:
+
+\Sigma: # - Sentence - #
+F: 		Sentence -> NP - VP
+		VP 	 -> Verb - NP
+		NP 	 -> the - man, the book
+		Verb -> took
+		
+The grammar forms the sentence "the man took the book". We could swap in other verbs, such as "has taken" or "is being taken", but not "has taking" or "is being taken". We could create a set of rules that capture this, but this would end up rather convoluted. This is due to the fact that the valid verbs are dependent on the noun preceeding it. 
+
+In addition, Chomsky motivated the use of auxiliary tokens that help to concatenate tokens if needed, for example "be" to "be - en" (to make "been"). However, cases like "have - past" -> "had", "take - ing" -> "taking", and "take - past" -> "took" results in rules that depends on the preceeding and next tokens, which violates the definition of rules in phrase structures. 
+
+#### Transformational Grammar
+
+To solve this problem, Chomsky introduces grammatical transformation which converts a sentence with a given structure to a new sentence with a different structure. We are now introducing a model that operates on the sentence level. 
+
+A ***phrase marker*** is defined as the set of strings that occurs as lines in the derivations D_1, ... D_n (see next slide for examples of lines in two different derivations). The ***restricting class*** defines which phrase markers the transformation can apply to. An ***elementary transformation*** is a transformation that takes a sequence of strings and rearranges them, omits some, or inserts new strings in the sequence.
+
+We can construct a rule that transform "a man ate the food" to "the food was eaten by the man", allowing use to construct the simpler first sentence then transforming the overall structure to the second. 
+
+# Slide 10
+
+An example of a phrase structure is given in the slide. We start with `Sentence`, which can be replaced by a noun phrase (NP) followed by a verb phrase (VP) as shown in the rule F. NP and VP are further broken down and its constituents are further defined. We then can derive the sentence "the man took the book". Notice there are two paths to define this sentence. Also notice the rules defined in F don't consider the values left and right of the replaced element. It is applied *free of its context*. 
+
+[Define CFG and explain where recursiveness shows up]
+[Context-free grammar (CFG)](https://en.wikipedia.org/wiki/Context-free_grammar) follows the same idea, it's a formal grammar where its rules are applied to nonterminal symbols with the form 
+
+A -> \alpha 
+
+We can implement recursion easily. Suppose we have the grammar G with production rule
+
+S -> aSb
+S -> \epsilon
+
+where \epsilon is an empty and terminal character. The first rule has the non-terminal character S, so we can continue applying these rules. This creates the language {a^nb^n | n \in \non-negative whole numbers}. Notice that this is not possible to form with an FSM. For example, if we wanted to create aaabbb, we can do the following:
+
+S
+aSb
+aaSbb
+aaaSbbb
+aaabbb
+
+We are able to model recursion this way! 
+
+# Slide 11
+
+Many of the structures we care about are defined as context-free grammars! [JSON standard](https://datatracker.ietf.org/doc/html/rfc7159) defines it as a CFG. Many prgramming languages, such as [Python](https://docs.python.org/3/reference/grammar.html), are defined as a PEG, similar to CFG, but incorporates some new features such as ... .
+
+# Slide 12
+
+Regular expressions and finite state machines are equivalent. Analogously, context-free grammars and ***pushdown automatas (PDA)*** are equivalent. Historically, this was introduced in the Oettinger paper ["Automatic Syntactic Analysis and the Pushdown Store"](https://mt-archive.net/Oettinger-1961.pdf), where an example was given to show that an unbounded nested formal syntax can use a stack to analyze the language left-to-right. The Schützenberger paper showed the equivalency between the pushdown automata and context-free languages. 
+
+# Slide 13
+
+Informally, a pushdown automata is a finite state machine with a stack. We start at some state, transition through the FSM like normal. Eventually, we transition into a state that will push or pop the stack. The stack carries "symbols". This symbol carries information of what FSM we are following. Another interpretation would be that our state is dependent on the input tape, similar to an FSM, *and* the top of the input stack. One last interpretation is during the transitions that *push* onto the stack, we enter a new FSM that we traverse. This FSM might push onto a stack and we continue into a new FSM. At some point, the FSM will *pop* from the stack and we will reenter the previous FSM.
+
+The important difference between an FSM and a PDA is the existence of a stack-based memory that allows us to model recursion.
+
+# Slide 14
+
+Certain PDAs are ***non-deterministic (NPDA)***. The simplest example that demonstrate this is a PDA to represent palindromes. 
+
+Consider
+
+[START LATEX]L = {ww^R | w in {a,b}*}[END LATEX]
+
+where w is a string of arbitrary length and order of `a` and `b` and w^R is w reversed. Take the example
+
+aabbaa
+
+We push the first half:
+
+read a -> push a
+read a -> push a
+read b -> push b
+
+then we pop for the second half
+
+read b -> pop b
+read a -> pop a
+read a -> pop a
+
+but when we traverse, we don't necessarily know what is the middle of the palindrome and when to switch from pushing to popping. At every transition, `w` could be done and we could be in the second half. We must keep track of both paths, push and pop. As we traverse through the string, one path may become invalidated. We can then discard it. The key point is for NPDA, we must keep track of multiple stacks when the transition is ambiguous. 
+
+Consider this example
+
+[START LATEX]L = {wcw^R | w in {a,b}*}[END LATEX]
+
+where we include the character c to represent the middle of the palindrome. 
+
+When we traverse and read 'a' or 'b', we know that we remain in the 'w' portion of the palindrome. Only once we read 'c' do we know we are at the center and must start popping from the stack. There is no ambiguity, the transition from pushing to popping occurs once we see the character 'c'. This is an example of a ***deterministic pushdown automata (DPDA)***.
+
+# Slide 15
+
+An example of a language that requires a stack to traverse through is given above. A regular FSM can not keep track of an arbitrary number of 'a' for the second half of the string.
+
+# Slide 16
+
+In this example, we will use a pushdown automata to verify if the string belongs in the language. The PDA is simple, if we read 'a', we push 'A' onto the stack. If we read 'b', we pop 'A' from the stack. At the end, there should be no input left and the stack should be empty. If we have remaining elements on the stack at the end or pop from the stack when it is empty, we know our string is not valid in the language constructed by the PDA. 
+
+# Slide 17
+
+We can do the same for JSON and we can check whether our JSON object matches the desired structure. Notice the stack contains `OBJECT` or `ARRAY`. The value at the top of the stack indicates the FSM we are following. When `ARRAY` is at the top, we follow its FSM and same with `OBJECT`.
+
+# Slide 18
+
+We can use PDA for constrained decoding. Similar to an FSM, we can construct a mask at each state, where now the state is dependent on the FSM and the stack and during transition, we might manipulate the stack. We can apply many of the same optimizations we saw earlier. However, due to the non-determinism and the stack manipulation, we do not necessarily know the full token mask for every state at compile time. As we saw earlier, computing the mask during runtime leads to a performance degradation. 
+
+For example, consider the following tokens:
+
+"ab"
+"cd},"
+"ef};"
+
+We could be in a state describing a JSON. The first token could be considered valid for the current state. This can be precomputed. As we parse through each character in the two tokens, we will parse through '}'. In our PDA, we will pop from the stack and re-enter a previous state. For the "cd}," , we will parse through the ','. Whether the comma is valid is dependent on whether we are in an array of JSON or not. However we do not know if we will pop into an ARRAY object at compile time, we only know during runtime. We can not classify the token as valid or invalid in the token mask until runtime. A similar line of reasoning can be applied to "ef};". 
+
+# Slide 19
+
+We will be able to determine the mask for most tokens during compile time. For the remaining tokens, we will have to determine its validity during runtime. XGrammar distinguishes between the two as ***context-independent*** and ***context-dependent***.
+
+# Slide 20
+
+We can determine which tokens are context-independent and context-dependent beforehand given a defined CFG. The transitions that involve popping the stack requires information about the stack, which we only know during runtime. These tokens are context-dependent. The paper shows most tokens are context independent! 
+
+# Slide 21
+
+XGrammar generates the tokenmask beforehand, classifying the token as accepted, rejected, or context-dependent. Context-dependent require us to classify during runtime. This runtime classification will remain the bottleneck, so it becomes important to optimize and reduce the number of context-dependent tokens.
+
+# Slide 22
+
+To reduce the memory requirement and transfers, we only store the two minority classes. If it is not stored in the mask, we know it must occur in the majority class.
+
+# Slide 23
+
+We described context-dependent characters as those that occur after a pop on the stack. We can further optimize this by expanding the PDA and determining the possible parent symbols we could pop into by keeping track of the symbols of the FSMs that push the current symbol onto the stack. For example, given the following tokens while we are parsing a JSON:
+
+"}}"
+"}]"
+"},"
+"}."
+
+we would have classified all of them as context-dependent as the first '}' would result in a pop operation. The '}', ']', ',', '.''s validity depend on the parent symbol. However, we know from our PDA that it can only be and JSON within a JSON or an array. Therefore the "}." is not a valid token. There exists no case where the decimal point will come after a "}". We can reject this token. We still have to classify the rest as context-dependent, but we have reduced the number of tokens we need to check.
+
+# Slide 25
+
+In cases where we have an NPDA, such as when we enter a portion of the CFG where it's defined as `value = array | string`, we have to keep track the multiple stacks. Rather than copy the stack, we have multiple branches when there is an ambiguous grammar expansion. This means the stack is stored as a tree, not as an array. It allows us to rollback in O(1) time and reduces memory footprint.
+
+# Slide 27
+
+XGrammar also implements rule inlining and node merging. Two nodes are mergable its parents are identical.
+
+# Slide 28
+
+XGrammar overlaps the LLM computation on the GPU and the mask generation on the CPU.
+
+# Slide 29
+
+XGrammar gets great results, notice that the y-axis is in log-scale!
+
+# Slide 32
+
+I did not cover XGrammar 2 in detail during my presentation, but it focuses on structured generation for agentic workloads. The optimizations are provided above in slides 30 and 31. It achieves great results as well, almost matching unconstrained generation performance!
+
+# Slide 33
+
+Here are some additional paper and works related to structured generation if you are interested in learning more:
+
+[Fast JSON Decoding with FSM blog](https://www.lmsys.org/blog/2024-02-05-compressed-fsm)
+[Outlines](https://arxiv.org/pdf/2307.09702)
+[Coalescence](https://blog.dottxt.ai/coalescence.html)
+[Three Models for the Description of Language](https://chomsky.info/wp-content/uploads/195609-.pdf)
+[On Context-Free Languages and Push-Down Automata](https://www.sciencedirect.com/science/article/pii/S0019995863903061?fr=RR-2&ref=pdf_download&rr=a1268abe1bea57d1)
+[XGrammar](https://arxiv.org/pdf/2411.15100)
+[XGrammar-2](https://arxiv.org/pdf/2601.04426)
+[LLGuidance: Making Structured Outputs Go Brrr](https://guidance-ai.github.io/llguidance/llg-go-brrr)
+
+
+	
