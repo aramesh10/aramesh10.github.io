@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A Primer to ML Compilers</title>
+  <meta name="description" content="Aditya Ramesh" />
+  <meta name="author" content="Aditya Ramesh" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="A Primer to ML Compilers" />
+  <meta property="og:description" content="Aditya Ramesh" />
+  <meta property="og:url" content="https://aramesh10.github.io/ml-compilers-primer/ml-compilers-primer.html" />
+  <meta property="og:image" content="https://aramesh10.github.io/ml-compilers-primer/thumbnail.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="A Primer to ML Compilers" />
+  <meta name="twitter:description" content="Aditya Ramesh" />
+  <meta name="twitter:image" content="https://aramesh10.github.io/ml-compilers-primer/thumbnail.png" />
+  <style>
+    :root {
+      --text: #000;
+      --muted: #666;
+      --border: #ddd;
+      --code-bg: #f5f5f5;
+      --bg: #fff;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Times New Roman", Times, serif;
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: 230px minmax(0, 760px) 230px;
+      gap: 48px;
+      max-width: 1316px;
+      margin: 32px auto;
+      padding: 0 24px 60px;
+      align-items: start;
+    }
+
+    aside.sidebar {
+      position: sticky;
+      top: 28px;
+      max-height: calc(100vh - 56px);
+      overflow-y: auto;
+      font-size: 13.5px;
+    }
+
+    aside.sidebar .home-link {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 22px;
+    }
+
+    aside.sidebar .toc-title {
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    aside.sidebar nav a {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 5px 8px 5px 11px;
+      margin-left: -1px;
+      border-left: 2px solid transparent;
+      color: #444;
+      text-decoration: none;
+      line-height: 1.4;
+      transition: color 0.2s ease, border-left-color 0.2s ease;
+    }
+
+    aside.sidebar nav a:hover {
+      color: #000;
+      border-left-color: #ccc;
+    }
+
+    aside.sidebar nav a.active {
+      color: #000;
+      border-left-color: #000;
+    }
+
+    aside.sidebar nav a.toc-main {
+      margin-top: 12px;
+    }
+
+    aside.sidebar nav a.toc-main:first-child {
+      margin-top: 0;
+    }
+
+    aside.sidebar nav a.toc-sub {
+      padding-left: 23px;
+      font-size: 12.5px;
+      color: #777;
+    }
+
+    aside.sidebar nav a.toc-subsub {
+      padding-left: 35px;
+      font-size: 12px;
+      color: #888;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    h1 {
+      font-size: 32px;
+      line-height: 1.15;
+      margin: 8px 0 4px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+
+    p {
+      margin: 0 0 16px;
+    }
+
+    a {
+      color: #000;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .overview {
+      margin-top: 24px;
+      margin-bottom: 8px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 32px 0;
+    }
+
+    .slides {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .slide {
+      position: relative;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 32px;
+      scroll-margin-top: 20px;
+    }
+
+    .slide-number {
+      position: absolute;
+      top: 0;
+      left: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .section-heading {
+      width: 100%;
+      scroll-margin-top: 20px;
+    }
+
+    h2.section-heading {
+      font-size: 24px;
+      margin: 8px 0 16px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }
+
+    .slides > h2.section-heading:first-child {
+      padding-top: 0;
+      border-top: none;
+    }
+
+    h3.section-heading {
+      max-width: 680px;
+      margin: 0 auto 8px;
+      font-size: 19px;
+    }
+
+    h4.section-heading {
+      max-width: 680px;
+      margin: 0 auto 6px;
+      font-size: 16.5px;
+      font-weight: bold;
+    }
+
+    .slides > h2.section-heading + h3.section-heading,
+    .slides > h3.section-heading:first-child,
+    .slides > h4.section-heading:first-child {
+      margin-top: 0;
+    }
+
+    .slides img {
+      max-width: 100%;
+      width: 680px;
+      height: auto;
+      border: 1px solid var(--border);
+    }
+
+    .notes {
+      width: 100%;
+      max-width: 680px;
+      margin-top: 16px;
+      padding: 0;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .notes p {
+      margin: 0 0 18px;
+    }
+
+    .notes p:last-child {
+      margin-bottom: 0;
+    }
+
+    .notes h4 {
+      display: block;
+      font-size: 16px;
+      margin: 20px 0 8px;
+      font-weight: bold;
+    }
+
+    .notes ul {
+      list-style: disc outside;
+      margin: 0 0 16px 32px;
+      padding-left: 24px;
+    }
+
+    .notes li {
+      margin: 0;
+    }
+
+    .notes blockquote {
+      margin: 0 0 18px;
+      padding: 0 32px;
+      border: none;
+      color: #333;
+      font-size: 15px;
+      font-style: italic;
+    }
+
+    .notes pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 0 32px 18px;
+    }
+
+    .notes code {
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .notes pre code {
+      background: none;
+      padding: 0;
+      font-size: 1em;
+    }
+
+    @media (max-width: 860px) {
+      .page {
+        grid-template-columns: 1fr;
+        margin: 0 auto;
+        padding: 24px 16px 40px;
+      }
+
+      aside.sidebar {
+        position: static;
+        max-height: none;
+        margin-bottom: 32px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+    .katex { font-size: 0.95em; }
+  </style>
+  <script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "xtkpxwwi63");
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    window.addEventListener('load', function () {
+      if (typeof renderMathInElement === 'function') {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ]
+        });
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="page">
+    <aside class="sidebar">
+      <a class="home-link" href="../index.html">&larr; home</a>
+      <div class="toc-title">Contents</div>
+      <nav id="toc"></nav>
+    </aside>
+
+    <main>
+      <h1>A Primer to ML Compilers</h1>
+      <p class="overview" id="overview"></p>
+      <p class="subtitle"><a href="ML Compilers.pdf">Download Presentation</a>.</p>
+
+      <hr class="divider" />
+
+      <div class="slides" id="slides"></div>
+    </main>
+  </div>
+
+  <script>
+    const totalSlides = 76;
+
+    const overviewText = 'This presentation was given at a <a href="https://x.com/sgdescent/status/2027486260646789429" target="_blank" rel="noopener">ML systems reading group at CMU</a> over the summer. I have taken the slides and added notes underneath to share the presentation. This largely covers the papers that introduced TensorFlow, PyTorch 2, and TVM, along with the preceding works that laid the foundation or inspired these projects. This presentation and its notes should provide a fundamental overview of the ML compiler landscape to get started.';
+
+    const toc = [
+      {
+        title: "Overview", slide: 2, children: [
+          { title: "High Level IR", slide: 5 },
+          { title: "Low Level IR", slide: 14 },
+        ]
+      },
+      {
+        title: "Compilers", slide: 20, children: [
+          {
+            title: "TensorFlow", slide: 21, children: [
+              { title: "Theano", slide: 22 },
+              { title: "TensorFlow", slide: 25 },
+            ]
+          },
+          {
+            title: "PyTorch", slide: 28, children: [
+              { title: "AutoGrad", slide: 29 },
+              { title: "Chainer", slide: 34 },
+              { title: "PyTorch", slide: 39 },
+              { title: "Glow", slide: 42 },
+              { title: "PyTorch 2", slide: 47 },
+            ]
+          },
+          {
+            title: "TVM", slide: 53, children: [
+              { title: "Halide", slide: 54 },
+              { title: "TVM", slide: 63 },
+            ]
+          },
+        ]
+      },
+      { title: "Papers", slide: 71 },
+      {
+        title: "Future", slide: 73, children: [
+          { title: "Mirage", slide: 74 },
+          { title: "ExecuTorch", slide: 76 },
+        ]
+      },
+    ];
+
+    const tocLevelClass = ["toc-main", "toc-sub", "toc-subsub"];
+    const headingTag = ["h2", "h3", "h4"];
+
+    // Flattened lookup: slide number -> { title, depth, id }, used both to
+    // render TOC links and to inject matching section headers into the slides.
+    const sectionsBySlide = {};
+
+    function indexSections(entries, depth) {
+      for (const entry of entries) {
+        const id = `section-${entry.slide}`;
+        sectionsBySlide[entry.slide] = { title: entry.title, depth, id };
+        if (entry.children) {
+          indexSections(entry.children, depth + 1);
+        }
+      }
+    }
+
+    indexSections(toc, 0);
+
+    function renderToc(entries, depth, target) {
+      for (const entry of entries) {
+        const a = document.createElement("a");
+        a.className = tocLevelClass[depth] || "toc-subsub";
+        a.href = `#${sectionsBySlide[entry.slide].id}`;
+        a.textContent = entry.title;
+        target.appendChild(a);
+        if (entry.children) {
+          renderToc(entry.children, depth + 1, target);
+        }
+      }
+    }
+
+    renderToc(toc, 0, document.getElementById("toc"));
+
+    function fastScrollTo(target, duration) {
+      const startY = window.scrollY;
+      const endY = target.getBoundingClientRect().top + startY;
+      const startTime = performance.now();
+
+      function step(now) {
+        const t = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        window.scrollTo(0, startY + (endY - startY) * eased);
+        if (t < 1) {
+          requestAnimationFrame(step);
+        }
+      }
+
+      requestAnimationFrame(step);
+    }
+
+    document.getElementById("toc").addEventListener("click", (e) => {
+      const link = e.target.closest("a");
+      if (!link) return;
+      const target = document.querySelector(link.getAttribute("href"));
+      if (!target) return;
+      e.preventDefault();
+      fastScrollTo(target, 300);
+      history.pushState(null, "", link.getAttribute("href"));
+    });
+
+    function setupScrollSpy() {
+      const links = Array.from(document.querySelectorAll("#toc a"));
+      const targets = links
+        .map((link) => ({
+          link,
+          el: document.querySelector(link.getAttribute("href")),
+        }))
+        .filter((t) => t.el);
+
+      function onScroll() {
+        const pos = window.scrollY + 100;
+        let active = targets[0];
+        for (const t of targets) {
+          if (t.el.offsetTop <= pos) {
+            active = t;
+          } else {
+            break;
+          }
+        }
+        for (const t of targets) {
+          t.link.classList.toggle("active", t === active);
+        }
+      }
+
+      document.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    }
+
+
+    // Raw (lightly-marked-up) speaker notes, keyed by slide number.
+    // Supports: **bold**, *italic*, `code`, [text](url), ```code blocks```,
+    // \"\"\"blockquotes\"\"\", ### headings, and 4-space-indented bullet lists.
+    const slideNotes = {
+      3: `When we refer to ML compilers, we refer to a stack of software components that take a user defined model and outputs efficient code to run on a device. UX design, supporting different devices, compiling for inference vs. training all become important when designing an ML compiler.`,
+
+      4: `I'll motivate ML compilers using the framework from the [The Deep Learning Compiler: A Comprehensive Survey](https://arxiv.org/pdf/2002.03794) paper. Generally, ML compilers follow a pattern: the user provides a model definition that creates a graph. This graph sits in the frontend and is generally hardware independent. Graph optimizations are applied to this graph until it is fully optimized. Then this graph is *lowered* into a *low-level intermediate representation (IR)*. This is generally designed and optimized with a targeted device. This is finally compiled into machine code.`,
+
+      5: `The high-level graphs can represented as directed acyclic graphs (DAG). The user defines this DAG. From this, we can then launch kernels for a library for each node, using the edge dependencies as the inputs.`,
+
+      6: `It can also be represented with a [let-binding representation](https://en.wikipedia.org/wiki/Let_expression) but this is not as common.`,
+
+      8: `Each node in the high-level IR represents an operation. This can be defined at different levels of granularity, whether representing an entire neural network or specific algebraic expressions.`,
+
+      9: `Once the DAG is constructed, we can optimize the graph. Generally, we optimize the graph in passes, walking through the graph, applying optimizations in iterations until it reaches a stable point and the graph has no remaining optimizations. We can apply optimizations on a particular node, over a subset of nodes, or some overall characteristic of the entire graph.
+
+Here, it is worth mentioning [equality saturation](https://www.cs.cornell.edu/~lerner/papers/lmcs11-eqsat.pdf). Optimizing the graph in passes creates a dependency on the optimization ordering. Equality saturation removes this dependency and enables the use of a global heuristic to optimize the graph. \`egg\` is a [popular library](https://github.com/egraphs-good/egg) that implements this in Rust.`,
+
+      12: `Operator fusion is often implemented in a rule-based fashion. TVM classifies a node into one of four classes then based on the parent and child nodes to these classes, fusion can occur based on the listed rules. Operator sinking is also common to reorder computation to enable more fusion.`,
+
+      13: `CSE, in simple terms, finds repeated operations and stores the result rather than recomputing it each time. Optimizations such as DCE, NOP elimination, and zero-dim tensor elimination tends to appear when an optimizer pass occurs resulting in some dead operation. Memory planning is also important as memory is often a bottleneck. Compilers may choose in-place when the input buffer has no other pending consumer, typical in gradient accumulation, element-wise updates, or in inference pipelines.`,
+
+      14: `While we could launch a kernel for each node from a kernel library, constructing a kernel library with all the possible combinations after optimizing the DAG is infeasible. We could restrict the graph optimizations to only allow kernels from our library, but this makes the library the bottleneck and can result in lower performance. Instead we could do some code generation and compile this to device code straight from the graph. We will find that an intermediate layer, a low-level IR, is useful to apply transformation to the code at a high level before having it compiled into device code. This IR can encode information about the actual implementation, where another set of design space can be searched and optimized, before code generation occurs.`,
+
+      15: `Some examples of real low-level IRs used in modern ML compilers`,
+
+      17: `The design space of optimization for the low-level IR focuses on loop structure, tiling, memory, pipelining, and scheduling. These are often hardware dependent, so device needs to be specified by the user.`,
+
+      18: `This is a large design space, so different strategies are used to search and evaluate the best configurations.`,
+
+      19: `Once the low-level IR is optimized, it is converted into code, whether Triton, CUDA, TIR, or MLIR. The code can then get compiled into the device binary.`,
+
+      21: `<ul><li><a href="https://www.researchgate.net/publication/228832149_Theano_A_CPU_and_GPU_math_compiler_in_Python">Theano: A CPU and GPU Math Compiler in Python</a></li><li><a href="https://arxiv.org/pdf/1605.08695">TensorFlow: A system for large-scale machine learning</a></li></ul>`,
+
+      22: `Theano was an early math compiler that optimized mathematical expressions with NumPy-like syntax. The user defines the variables and the computation graph. Theano then compiles and updates variables each iteration a function is called, simulating a backward pass.`,
+
+      23: `Theano follows a compilation pipeline. CSE, DCE, and arithmetic simplification and strength reduction are performed along with stabilization, simplifying expressions like \`log(1+exp(x))\` as \`x\` for large values of \`x\`. Specialization involves replacing operations with efficient implementations such as \`pow(x, 2)\` with \`sqr(x)\` and calling BLAS.
+
+GPU computation follows the following heuristic from the paper:
+
+"""
+if any input or output of an expression resides on the GPU and the expression has a GPU equivalent, then the GPU equivalent is substituted in.
+"""
+
+Code generation then runs the python modules for the computation graph.`,
+
+      28: `<ul><li><a href="https://dougalmaclaurin.com/phd-thesis.pdf">AutoGrad (Ch. 4)</a></li><li><a href="https://arxiv.org/pdf/1908.00213">Chainer: A Deep Learning Framework for Accelerating the Research Cycle</a></li><li><a href="https://arxiv.org/pdf/1912.01703">PyTorch: An Imperative Style, High-Performance Deep Learning Library</a></li><li><a href="https://arxiv.org/pdf/1805.00907">Glow: Graph Lowering Compiler Techniques for Neural Networks</a></li><li><a href="https://docs.pytorch.org/assets/pytorch2-2.pdf">PyTorch 2: Faster Machine Learning Through Dynamic Python Bytecode Transformation and Graph Compilation</a></li></ul>`,
+
+      29: `Autograd was motivated by the lack of software libraries that automated reverse-mode differentiation.`,
+
+      30: `There are multiple approaches to create the computational graph *F*. The first is to have the user construct this, similar to Theano. Another way is to construct a source code inspector, which would amount to building a custom Python interpreter. Their approach, which will influence later ML compilers, monitors the function as it executes and construct the computational graph while it is being created.`,
+
+      31: `From Section 4.2 of Dougal Maclaurin's PhD Thesis, [*Modeling, Inference and Optimization with Composable Differentiable Procedures*](https://dougalmaclaurin.com/phd-thesis.pdf):
+
+"""
+The main idea is to replace every primitive function with a wrapped version. The wrapping layer takes care of the necessary book-keeping, recording the name of the function, the arguments, and the return value. To the user, the wrapped function looks and behaves just like the original.
+"""
+
+The python operators are overloaded to keep track of these characteristics so a graph can be constructed during runtime.`,
+
+      32: `Suppose we want to calculate the gradient of a variable with respect to another variable. During construction, we create a tape that keeps track of the list of operations. When a new node is created, it is appended to the tape so the tape is sorted topologically. A tape is created for each variable we want the gradient with respect to. Each Node inherits its parent's tape. Then given the independent and dependent variable, we can go to the independent variable's tape, check if the dependent variable is present and trace backwards.`,
+
+      33: `Autograd supports the gradient of many functions.`,
+
+      34: `Chainer noted that control flows and debugging were difficult in frameworks that required the user to construct the graph. Chainer's design will look similar to AutoGrad's backward pass.`,
+
+      35: `Chainer tackled the issue by introducing the **Define-by-Run** paradigm.
+
+In the ***Define-and-Run*** paradigm, the computational graph of the model is first defined and constructed in the Define phase then the actual forward and backward calculation of the graph is performed in the Run phase. It works well for static models, but due to the graph compilation, it becomes difficult to support conditional flows within the graph. Frameworks like TensorFlow had to create special operators to create this behavior. In addition, it was difficult to debug and observe the internals of the model. A user wouldn't be able to use print statements to analyze a tensor for example.
+
+In the ***Define-by-Run*** paradigm, unlike Theano or Tensorflow which constructs the graph beforehand, Chainer constructs the graph during runtime similar to AutoGrad. Variable nodes represent the variables involved in the computation and function nodes represent the operations applied to the variables. The computational graph only defines how to backtrack the operations applied to the input and does not define the forward computation. This allowed the use of Python control flows and made debugging easier.`,
+
+      36: `Often when creating a neural network, we reuse components. To enable this, Chainer uses classes to construct the blocks that make up the model. This should look familiar! PyTorch and Chainer's UX were [inspired and co-evolved with each other](https://soumith.ch/blog/2023-12-17-pytorch-design-origins.md.html#/theinspirationfromchainer%E2%86%92pytorchandtheinspirationforpytorch%E2%86%92chainerv2).`,
+
+      37: `Memory efficiency remained an important problem for handling backpropagation. Normally, in the *Define-and-Run* paradigm, the computational graph is available before execution, allowing the compiler to apply many of the graph transformation discussed earlier to reduce memory consumption. In a *Define-by-Run* framework, Chainer implemented the following optimizations:
+
+### Global Memory Usage Reduction
+
+Chainer deallocates the memory for parts of the computational graph that is no longer referenced in the code. This elimination occurs after processing it during the backpropagation, minimizing the peak memory consumption.
+
+### Function-wise Local Memory Usage Reduction
+
+Chainer also only saves the inputs and outputs that are needed by the backward formula.
+
+### Double Backpropagation
+
+Chainer supports higher order gradients through supporting backpropagation. From Section 4.2 of [*Chainer: A Deep Learning Framework for Accelerating the Research Cycle*](https://arxiv.org/pdf/1908.00213):
+
+"""
+Double backpropagation is supported by implementing the backward computation of each operation using functions supporting differentiation.
+"""
+
+This can result in reference cycles as the gradient's computational graph may reference the original variable. For example, given \\(y = x^3\\), the backward pass is \\(\\partial y/\\partial x = 3x^2\\). For a normal backward pass, storing \\(3x^2\\) is sufficient. \`x.grad\` is stored as the result of \\(3x^2\\).
+
+In the case where double backpropagation is needed, the graph of \\(3x^2\\) is stored into \`x.grad\`. The graph looks like the following:
+
+\`\`\`
+x -> square -> x² -> * 3 -> ∂y/∂x
+\`\`\`
+
+which contains a reference to \`x\`. Now if we store this graph into \`x.grad\` rather than the over expression result, this results in a circular reference. \`x\` points to the gradient graph through .grad and gradient graph points through \`x\` in one of its nodes.
+
+To solve this, Chainer decouples the graph from the variable to remove the reference cycles in the first case by introducing \`Variable(x)\` and \`VariableNode(x)\`, which separates the references made from the user code and inter-node references.
+
+A similar reference cycle occurs when with gradients that require the output. Consider
+
+\\[y = \\tanh(x)\\]
+
+The backward pass is
+
+\\[\\partial y/\\partial x = 1 - y^2\\]
+
+creating a reference cycle with \`y\`. In this case, Chainer stores another reference to the \`y\` array and uses it during the graph, similarly decoupling the two nodes and breaking the cycle.`,
+
+      38: `To use GPUs, CuPy was developed for the backend of Chainer.`,
+
+      39: `PyTorch implements many of the same ideas from Chainer but aimed to solve the performance issue.`,
+
+      40: `PyTorch's core is implemented in C++ rather then Python like in Chainer. In PyTorch's eager mode, CUDA kernels are called asynchronously and queued using CUDA streams. This allows for additional host side computation while waiting for the kernel's computation to complete.`,
+
+      41: `Back when the PyTorch 2019 paper was released, there was no support for \`cudaMallocAsync\`. PyTorch created their own allocator to get around this by allocating a large chunk of memory then reassigning the memory pool in chunks internally.`,
+
+      42: `As PyTorch was run in eager mode and a graph was only known after execution in runtime, PyTorch introduced TorchScript to convert the PyTorch model into a graph during *compilation*. This is out of the scope of the presentation. This graph was then given to a backend that the user chose, one of them being Glow.
+
+Motivated by the fact that compilers like GCC and LLVM struggle to optimize nodes in a dataflow graph, they introduce an additional lowering phase for the graph optimization. The motivating problem in the paper is given in Fig. 1. Two for-loops write into some memory region, and later the return statement reads from some element in the array. Neither GCC nor LLVM were able to remove the first loop, which is redundant, or replace the load operation with the constant value \`4\`. The reason is that analyzing loops and memory is difficult. The compiler needs to prove that the indices in the loops do not overflow, and that pointers in the program do not alias, and that the result of the computation is accurate and conform with the specification of the C programming language.`,
+
+      43: `Glow essentially goes through two graph phases. The first is a standard dataflow graph, where the nodes are defined at the model level (\`Convolution\`, \`MaxPool\`, \`FFN\`). Graph level optimizations are applied at this layer. To allow the compiler's backend to apply predication and generated fused kernel effectively, Glow lowers into a lower-level DAG, where the nodes are linear algebra operators. For example, a fully connected layer is decomposed into a matrix multiplication and broadcast add. This allows for additional graph level optimizations at a finer level where target-specific optimizations can then be implemented at the low-level IR.`,
+
+      44: `In a phase called \`IRGen\`, the optimized graph is lowered into a low-level IR. This IR has two memory regions, the \`declare\` region, which stores variables in global scope, and \`program\` region, which allocates the variable within the kernel. Within the program region, we also see instructions with operands. In particular, the \`inout\` operands can be used to modify a tensor in-place. Here, many low-level IR optimizations can take place, such as copy elimination and buffer sharing.`,
+
+      45: `To support new instructions to Glow, they introduced \`ClassGen\`, which automatically generates the nodes for the high-level IR and instructions for the low-level IR.`,
+
+      46: `If we call an existing library given the optimized low-level IR, Glow would unable to provide additional context such as tensor sizes, memory addresses, and pointer aliases, to apply optimizations to the source code. Glow shipped a library that can use this information to generate optimized LLVM bitcode. In addition, Glow also implements operator stacking with some data structure, where element-wise operations are stacked into one loop rather than iterating through the buffer in a naive implementation.`,
+
+      47: `PyTorch 2 introduced the \`torch.compile\` feature through [TorchDynamo](https://docs.pytorch.org/docs/2.13/user_guide/torch_compiler/torch.compiler_dynamo_overview.html) and [TorchInductor](https://jino-rohit.github.io/blogs/15_inductor.html). TorchDynamo is a JIT compiler that generates the computational graph through PyTorch's Define-by-Run interface. However, for this presentation, we'll be focusing on TorchInductor, the default backed which translates the graph into [Triton](https://triton-lang.org/main/index.html).`,
+
+      48: `Rather than implementing lowerings for all operators in PyTorch to TorchInductor's IR, many operators in PyTorch are decomposed into a simpler set of operators that are easier to handle, similar to Glow's graph lowering. Decompositions are written as a Python implementation of a PyTorch operator in terms of other operators and is applied recursively until a fixed point is reached.`,
+
+      49: `TorchInductor has a *Define-by-Run Loop-level IR*, which allows TorchInductor to use Python's features without needing boiler plate. Functions are defined for the fundamental operators, where the fallback kernel which would have ran in eager mode is used if the node is not supported. \`TensorBox\` correspond to \`torch.Tensor\` and \`StorageBox\` corresponds to \`torch.Storage\`. The \`ComputedBuffer\` represents the tensor that will be generated using a Python function. The function is described with \`Pointwise\`, \`Reduction\`, \`Scatter\`, or other operators. The function is defined with \`ops\`, which then points to something that writes Triton or C++ code. There's a number of ops such as \`ops.load\`, \`ops.store\`, \`ops.add\`, \`ops.mul\`, \`ops.reduction\`, etc.`,
+
+      50: `To handle operator fusion, each buffer gets converted into some \`BaseSchedulerNode\`, which comprises of many children classes. Two \`SchedulerNode\`s are capable of being merged into a \`FusedSchedulerNode\`. A \`Scheduler.can_fuse(node1, node2)\` returns \`True\` if two nodes can be fused together. This checks dependency edges, and also checks many other properties to ensure correctness of a fusion. Then \`Scheduler.score_fusion(node1, node2)\` is used to order different fusion possibilities. Some fusions are mutually exclusive, so TorchInductor chooses the one with the higher score. The fusion score orders fusions by:
+
+    Category of fusion (e.g. pointwise/reduction/template)
+    Estimated bytes of memory traffic saved by the fusion
+    Shorter distance between nodes in the original graph`,
+
+      52: `Codegen is also responsible for common subexpression elimination (CSE). The pointwise decorator encodes boilerplate code used to facilitate block size heuristics, auto-tuning, and ahead-of-time kernel compilation. For more complex operations (matmuls and convolutions), TorchInductor has its own template system for generating Triton code that mixes handwritten Triton with generated Triton. A wrapper codegen is responsible for generating code that calls the kernels. It also supports C++ with OpenMP for CPU backend.`,
+
+      53: `<ul><li><a href="https://people.csail.mit.edu/jrk/halide-pldi13.pdf">Halide: A Language and Compiler for Optimizing Parallelism, Locality, and Recomputation in Image Processing Pipelines</a></li><li><a href="https://arxiv.org/pdf/1802.04799">TVM: An Automated End-to-End Optimizing Compiler for Deep Learning</a></li></ul>`,
+
+      55: `The design space for the code is large, but largely follows a pattern. The optimal loop structure, which describes how the memory is accessed and is dependent on characteristics like range, stride, and order, changes with each device.`,
+
+      56: `The Halide DSL decouples the algorithm from the loop structure!`,
+
+      59: `The call schedule is motivated by the following:
+
+    The granularity to *compute* the inputs
+    The granularity to *store* the result
+    Within the grains, the *order* the domain is traversed
+
+For domain order, the space of choices looks like:
+
+    Traverse sequentially vs. parallel
+    Unroll vs. vectorized
+    Column-major vs. row-major
+    Split and reorder loops
+
+For the granularities at which we compute and store, the call schedule can be described along three axes:
+
+    **Breadth-First** - computes and stores all values of a stage before moving to the next stage, computes and stores at the coarsest granularity.
+    **Fused** - computes and stores the values needed for each stage as needed, computes and stores at the finest granularity.
+    **Sliding Window** - stores at the root granularity, computes at the finest granularity
+
+Intuitively, this means the storage granularity my be equal or coarser than the computation granularity.`,
+
+      61: `The user can easily define the algorithm and the schedule separately.`,
+
+      62: `The Halide compiler can also choose the best schedule for the device using an autotuner.`,
+
+      63: `Graph-level optimizations must avoid operators not available in a predefined library or use unoptimized implementations. Many approaches to lowering the graph leads to a large search space for optimizations as more devices get released. Each device has their own memory hierarchy and benefit from different tiling strategies and pipelines.`,
+
+      64: `TVM extends Halide's compute and schedule separation with a separation of target hardware intrinsics from the transformation primitives. This scheduling space is then searched with an *automated program optimization framework* which uses an ML-based cost model. In addition, many of the graph-level optimizations can be applied to create new operators that are not supported by the libraries as the lowering to TIR with the optimized schedule performs competitively compared to custom implemented kernels.`,
+
+      65: `Example of TVM's API.`,
+
+      66: `The lowering enables TVM to do graph-level optimizations not possible in a kernel library system.`,
+
+      67: `We can see how TVM's Tensor Expression Language is similar to Halide!`,
+
+      68: `When modeling parallelism, most models follow a *nested parallelism* model, similar to fork-join, where each compute unit does not share data with its sibling. However, many GPU architectures introduce *shared memory*, where threads can cooperatively work to move data into a shared memory space before accessing their required data. *Memory scopes* were introduced such that the cooperative memory access can be included in the compiler by adding additional information about the dependencies of each thread. This allows the compiler to create these pipelines found in many GPU programs.`,
+
+      69: `Since each device has their own variations on tensor instructions, there's a challenge to support each version within the compiler, so *tensorization* was introduced to replace a unit of computation defined by the user or the compiler with supported corresponding intrinsic. The compiler pattern matches the computation pattern with the schedule and replaces it with the defined lowering function. This makes supporting new devices easier and allows the compiler engineer to create micro-kernels that can extend TVM for further optimizations.`,
+
+      70: `TVM's schedule space is a large search space. Their schedule optimizers has two components: a schedule explorer which proposes a new schedule and a ML model that predicts the schedule's cost. The optimizer chooses the top-k schedules given the cost model's estimate from a batch of schedule candidates. These candidates are chosen with an annealing algorithm, where a random configuration is chosen and walks until the configuration's estimated cost is lower than the start's cost. Once the top-k schedules have been selected, each configuration is ran and benchmarked. These results are saved and are used periodically to improve the ML cost model's performance.`,
+
+      72: `Some additional papers to read:
+
+<ul><li><a href="https://www.wisdom.weizmann.ac.il/~padon/taso-sosp19.pdf">TASO: Optimizing Deep Learning Computation with Automatic Generation of Graph Substitutions</a></li><li><a href="https://arxiv.org/pdf/1810.00952">Relay: A New IR for Machine Learning Frameworks</a></li><li><a href="https://arxiv.org/pdf/2006.06762">Ansor: Generating High-Performance Tensor Programs for Deep Learning</a></li><li><a href="https://arxiv.org/pdf/2311.02103">Relax: Composable Abstractions for End-to-End Dynamic Machine Learning</a></li></ul>`,
+
+      74: `Many current efforts focus on megakernels. ThunderKittens has a great blog explaining [megakernels](https://hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles).`,
+
+      75: `[Mirage](https://github.com/mirage-project/mirage) contains a compiler that represents the kernel in hierarchical graphs and contains a [superoptimizer that generates megakernels](https://www.usenix.org/system/files/osdi25-wu-mengdi.pdf). It also features a [runtime](https://arxiv.org/pdf/2512.22219) that launches tasks on a persistent kernel, scheduling each task based on finer grained dependencies.`,
+
+      76: `There's also efforts for [compilation for edge devices](https://arxiv.org/pdf/2605.08195). [ExecuTorch](https://executorch.ai/) powers on-device AI for Instagram, WhatsApp, and the Meta Glasses!`,
+    };
+
+    // Minimal markdown-ish -> HTML renderer for the notes above.
+    function renderInline(text) {
+      return text
+        .replace(/`([^`]+)`/g, (m, code) => `<code>${code}</code>`)
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+        .replace(/\[([^\]]+)\]\(([^)]*)\)/g, (m, label, url) =>
+          url ? `<a href="${url}" target="_blank" rel="noopener">${label}</a>` : label
+        );
+    }
+
+    function renderNotes(markdown) {
+      const blocks = markdown.trim().split(/\n\n+/);
+      let html = "";
+
+      for (const block of blocks) {
+        const isList = block
+          .split("\n")
+          .every((line) => line.trim() === "" || line.startsWith("    "));
+        const trimmed = block.trim();
+
+        if (trimmed.startsWith("<ul>")) {
+          html += trimmed;
+        } else if (trimmed.startsWith("```")) {
+          const code = trimmed.replace(/^```/, "").replace(/```$/, "").trim();
+          html += `<pre><code>${code}</code></pre>`;
+        } else if (trimmed.startsWith('"""')) {
+          const quote = trimmed.replace(/^"""/, "").replace(/"""$/, "").trim();
+          html += `<blockquote>${renderInline(quote)}</blockquote>`;
+        } else if (trimmed.startsWith("### ")) {
+          html += `<h4>${renderInline(trimmed.slice(4))}</h4>`;
+        } else if (isList) {
+          const items = trimmed
+            .split("\n")
+            .filter((line) => line.trim() !== "")
+            .map((line) => `<li>${renderInline(line.trim())}</li>`)
+            .join("");
+          html += `<ul>${items}</ul>`;
+        } else {
+          html += `<p>${renderInline(trimmed).replace(/\n/g, "<br>")}</p>`;
+        }
+      }
+
+      return html;
+    }
+
+    document.getElementById("overview").innerHTML = overviewText;
+
+    const container = document.getElementById("slides");
+
+    for (let i = 1; i <= totalSlides; i++) {
+      const num = String(i).padStart(2, "0");
+
+      const section = sectionsBySlide[i];
+      if (section) {
+        const heading = document.createElement(headingTag[section.depth] || "h4");
+        heading.className = "section-heading";
+        heading.id = section.id;
+        heading.textContent = section.title;
+        container.appendChild(heading);
+      }
+
+      // Top-level sections (Overview, Compilers, Papers, Future) are divider
+      // headers only — their slide image doesn't add anything, so skip it.
+      if (section && section.depth === 0) {
+        continue;
+      }
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "slide";
+      wrapper.id = `slide-${i}`;
+
+      const numberEl = document.createElement("span");
+      numberEl.className = "slide-number";
+      numberEl.textContent = i;
+      wrapper.appendChild(numberEl);
+
+      const img = document.createElement("img");
+      img.src = `slides/slide-${num}.png`;
+      img.alt = `Slide ${i}`;
+      img.loading = "lazy";
+      wrapper.appendChild(img);
+
+      const notes = slideNotes[i];
+      if (notes) {
+        const notesEl = document.createElement("div");
+        notesEl.className = "notes";
+        notesEl.innerHTML = renderNotes(notes);
+        wrapper.appendChild(notesEl);
+      }
+
+      container.appendChild(wrapper);
+    }
+
+    setupScrollSpy();
+  </script>
+</body>
+</html>
