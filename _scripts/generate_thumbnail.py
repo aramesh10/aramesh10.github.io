@@ -110,7 +110,7 @@ def render(title, out_path):
 
     # Stack from the bottom up, anchored on baselines, with tight leading.
     line_height = int(title_font.size * 1.08)
-    baseline = HEIGHT - MARGIN
+    baseline = HEIGHT - MARGIN - 130  # clear the title overlay some sites draw at the bottom
     if show_author:
         draw.text((MARGIN, baseline), AUTHOR, font=author_font, fill=AUTHOR_COLOR, anchor="ls")
         baseline -= int(author_font.size * 1.45)
