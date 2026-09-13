@@ -9,12 +9,12 @@
   <meta property="og:type" content="article" />
   <meta property="og:title" content="Introducing OpenGEMM" />
   <meta property="og:description" content="Aditya Ramesh" />
-  <meta property="og:url" content="https://aramesh10.github.io/preview/opengemm/opengemm.html" />
-  <meta property="og:image" content="https://aramesh10.github.io/preview/opengemm/thumbnail.png" />
+  <meta property="og:url" content="https://aramesh10.github.io/opengemm/opengemm.html" />
+  <meta property="og:image" content="https://aramesh10.github.io/opengemm/thumbnail.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Introducing OpenGEMM" />
   <meta name="twitter:description" content="Aditya Ramesh" />
-  <meta name="twitter:image" content="https://aramesh10.github.io/preview/opengemm/thumbnail.png" />
+  <meta name="twitter:image" content="https://aramesh10.github.io/opengemm/thumbnail.png" />
   <style>
     :root {
       --text: #000;
@@ -441,15 +441,23 @@
       .page {
         grid-template-columns: 1fr;
         margin: 0 auto;
-        padding: 24px 16px 40px;
+        padding: 16px 16px 40px;
       }
 
       aside.sidebar {
         position: static;
         max-height: none;
-        margin-bottom: 32px;
-        padding-bottom: 20px;
-        border-bottom: 1px solid var(--border);
+        margin-bottom: 12px;
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+
+      aside.sidebar .toc-details {
+        display: none;
+      }
+
+      aside.sidebar .home-link {
+        margin-bottom: 0;
       }
 
       .def-table {
@@ -503,7 +511,7 @@
 <body>
   <div class="page">
     <aside class="sidebar">
-      <a class="home-link" href="../../index.html">&larr; home</a>
+      <a class="home-link" href="../index.html">&larr; home</a>
       <details class="toc-details" open>
       <summary class="toc-title">Contents</summary>
       <nav id="toc">
@@ -536,15 +544,15 @@ c <span class="op">=</span> og.<span class="fn">run_kernel</span>(<span class="s
     <section class="version">
       <h2 id="motivation">Motivation</h2>
 
-      <p>I made OpenGEMM as I had many projects where having a cuBLAS-level performance GEMM kernel for a particular floating point type and shape implemented in CUDA would have been useful.</p>
+      <p>I have had a few projects now where having a cuBLAS-level performance GEMM kernel for a particular floating point type and shape implemented in CUDA would have been useful.</p>
 
-      <p>GEMM kernels are ubiquitous and there isn&rsquo;t any repository with a pure CUDA and PTX implementation of GEMM for a particular shape and datatype for B200s without a library abstraction behind it, a DSL implementation, or code buried in a blog post. <a href="https://github.com/deepseek-ai/DeepGEMM/tree/main/deep_gemm/include/deep_gemm/impls">DeepGEMM</a> has open source implementations of GEMM and more, but there was a library abstraction behind it, requiring a human or agent to manually parse through each file. While agent performance is improving, I saw the need for GEMM kernels implemented in CUDA as ubiquitous and solvable without the need for agents so I started this repository.</p>
+      <p>GEMM kernels are ubiquitous and there aren&rsquo;t many repositories with a pure CUDA and PTX implementation of GEMM given a particular shape and datatype for B200s without a library behind it, often behind a DSL abstraction, or code within a blog post. <a href="https://github.com/deepseek-ai/DeepGEMM/tree/main/deep_gemm/include/deep_gemm/impls">DeepGEMM</a> and ThunderKittens are both great projects, but the library abstraction required a human or agent to manually parse through each file to get the underlying CUDA implementation. While agents automate this, I saw this as a wasteful cost of tokens and time.</p>
 
-      <p>My initial ambition was to recreate cuBLAS for the major devices, including other NVIDIA GPUs like H100 and A100, but also AMD&rsquo;s, Google&rsquo;s TPUs, and Apple&rsquo;s Metal. However, this requires a lot more effort and I do think it is useful in its current state.</p>
+      <p>My initial ambition was to recreate cuBLAS for the major devices, including other NVIDIA GPUs like H100 and A100, but also AMD&rsquo;s, Google&rsquo;s TPUs, and Apple&rsquo;s Metal. This is a larger undertaking than anticipated, even with agents, and I have a limited bandwidth, so I decided to release it in its current state, which supports GEMM kernels for most datatypes on B200.</p>
 
       <h3 id="agents">Agents</h3>
 
-      <p>Often when asking an agent to iterate on a kernel, I provide it reference implementations from blog posts and GitHub repositories I find online. <code>emit_kernel</code> was motivated from this workflow as I was working on these kernels. Especially <a href="https://www.anthropic.com/engineering/code-execution-with-mcp">as tool calls are transitioning to become Python code snippets</a>, it seemed useful to have a function that will emit the CUDA files for these agents to use. Agents writing CUDA can save tokens and time using an existing optimized solution instead of rederiving the kernel from scratch each time.</p>
+      <p>I provide agents reference implementations from blog posts and GitHub repositories I find online when optimizing a kernel. <code>emit_kernel</code> was motivated from this workflow as I was working on these kernels. Especially <a href="https://www.anthropic.com/engineering/code-execution-with-mcp">as tool calls are transitioning to become Python code snippets</a>, it seemed useful to have a function that will emit the CUDA files for these agents to use. Agents writing CUDA can save tokens and time using an existing optimized solution instead of rederiving the kernel from scratch each time.</p>
 
       <h3 id="future">Future</h3>
 
@@ -564,9 +572,9 @@ c <span class="op">=</span> og.<span class="fn">run_kernel</span>(<span class="s
 
       <h3 id="open-source-cublas">Open source cuBLAS</h3>
 
-      <p>cuBLAS is closed source as of 09/13/2026. Prior to agents, an open-source cuBLAS library in CUDA would have been an immense effort to implement for an outsider, giving NVIDIA a competitive advantage and aligning with its business plan. With agents, these closed source libraries can quickly become democratized.</p>
-      <p>Although Jensen believes the <a href="https://blogs.nvidia.com/blog/ai-future-open-and-proprietary/">future of AI is open and proprietary</a> as AI is more than just a model and each industry handles its own unique challenges, cuBLAS does play an important role at a very low level of the AI stack. Open-sourcing cuBLAS can be beneficial to NVIDIA&rsquo;s long-term position as it would help to entrench consumers into their hardware if the software stack grows from it while pushing society&rsquo;s Pareto frontier by accelerating the rate at which technology improves. I do believe NVIDIA can help accelerate development of ML serving while remaining competitive from a business standpoint and that it is more beneficial to do it sooner than later.</p>
-      <p>That is unless NVIDIA pivots into becoming a model company, competing with OpenAI and Anthropic.</p>
+      <p>cuBLAS is closed source as of 09/13/2026. Prior to agents, an open-source cuBLAS library in CUDA would have been an immense effort to implement for an outsider, giving NVIDIA a competitive advantage. With agents, these closed source libraries can quickly become democratized.</p>
+      <p>Although Jensen believes the <a href="https://blogs.nvidia.com/blog/ai-future-open-and-proprietary/">future of AI is open and proprietary</a>, cuBLAS operates at a low part of the stack, which has a large downstream impact on the tech built on it. cuBLAS, as with any closed source library, will become open source with or without NVIDIA&rsquo;s permission. GEMM is already a solved problem and cuBLAS has the implementations already.</p>
+      <p>Open-sourcing cuBLAS would accelerate the advancement of model serving, pushing token costs down and making AI more accessible to the token poor. It benefits NVIDIA by entrenching consumers into their hardware with the software stack the open-source community would inevitably develop from it. It&rsquo;s beneficial for society and NVIDIA to make cuBLAS open-source as soon as possible, but its current business plan does not seem to reflect an understanding of the long-term changes in software from the advancement of these models.</p>
     </section>
 
     </main>
